@@ -1,0 +1,51 @@
+John Doe
+Software Engineer
+
+CONTACT
+Email: john.doe@example.com
+Phone: (555) 123-4567
+LinkedIn: linkedin.com/in/johndoe
+GitHub: github.com/johndoe
+
+SUMMARY
+Experienced software engineer with 5+ years of expertise in full-stack development, 
+specializing in React, Node.js, and cloud technologies. Passionate about building 
+scalable applications and mentoring junior developers.
+
+EXPERIENCE
+
+Senior Software Engineer | TechCorp Inc.
+January 2021 - Present
+- Led development of microservices architecture serving 1M+ users
+- Reduced API response time by 40% through optimization
+- Mentored team of 4 junior developers
+- Technologies: React, Node.js, PostgreSQL, AWS
+
+Software Engineer | StartupXYZ
+June 2019 - December 2020
+- Built customer-facing dashboard using React and TypeScript
+- Implemented CI/CD pipeline reducing deployment time by 60%
+- Collaborated with design team on UX improvements
+- Technologies: React, TypeScript, MongoDB, Docker
+
+EDUCATION
+
+Bachelor of Science in Computer Science
+University of Technology | 2015 - 2019
+GPA: 3.8/4.0
+
+SKILLS
+
+Languages: JavaScript, TypeScript, Python, Go
+Frontend: React, Next.js, Vue.js, TailwindCSS
+Backend: Node.js, Express, FastAPI, GraphQL
+Databases: PostgreSQL, MongoDB, Redis
+Cloud: AWS, Docker, Kubernetes
+Tools: Git, GitHub Actions, Jest, Cypress
+
+PROJECTS
+
+Open Source Contributor
+- Contributed to popular React libraries with 10K+ stars
+- Fixed critical bugs and added new features
+- Active in community discussions and code reviews
