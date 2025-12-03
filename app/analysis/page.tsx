@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,11 +20,24 @@ export default function AnalysisPage() {
     const [fromCache, setFromCache] = useState<boolean>(false)
     const [cachedAt, setCachedAt] = useState<string | undefined>()
 
-    useEffect(() => {
-        checkAuthAndLoadCV()
+
+    const startAnalysis = useCallback(async (content: string) => {
+        setIsAnalyzing(true)
+        setError('')
+
+        try {
+            const result = await analyzeCV(content)
+            setAnalysis(result.analysis)
+            setFromCache(result.fromCache)
+            setCachedAt(result.cachedAt)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to analyze CV')
+        } finally {
+            setIsAnalyzing(false)
+        }
     }, [])
 
-    const checkAuthAndLoadCV = async () => {
+    const checkAuthAndLoadCV = useCallback(async () => {
         // Check if user is authenticated
         const { data: { session } } = await supabase.auth.getSession()
 
@@ -50,23 +63,11 @@ export default function AnalysisPage() {
 
         // Automatically start analysis
         startAnalysis(content)
-    }
+    }, [router, startAnalysis])
 
-    const startAnalysis = async (content: string) => {
-        setIsAnalyzing(true)
-        setError('')
-
-        try {
-            const result = await analyzeCV(content)
-            setAnalysis(result.analysis)
-            setFromCache(result.fromCache)
-            setCachedAt(result.cachedAt)
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to analyze CV')
-        } finally {
-            setIsAnalyzing(false)
-        }
-    }
+    useEffect(() => {
+        checkAuthAndLoadCV()
+    }, [checkAuthAndLoadCV])
 
     const handleDownload = () => {
         const blob = new Blob([analysis], { type: 'text/plain' })

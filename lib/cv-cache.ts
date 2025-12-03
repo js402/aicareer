@@ -19,7 +19,7 @@ export async function getCachedAnalysis(
     userId: string,
     cvHash: string
 ) {
-    const { data, error } = await supabase
+    const { data } = await supabase
         .from('cv_analyses')
         .select('*')
         .eq('user_id', userId)

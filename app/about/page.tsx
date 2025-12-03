@@ -1,4 +1,4 @@
-import Link from "next/link"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Navbar } from "@/components/navbar"
@@ -31,11 +31,11 @@ export default function AboutPage() {
                         <CardContent className="space-y-4 text-muted-foreground">
                             <p>
                                 At TechCareer.AI, we believe that every tech professional deserves access to world-class
-                                career guidance. That's why we've built an AI-powered platform that analyzes your CV and
+                                career guidance. That&apos;s why we&apos;ve built an AI-powered platform that analyzes your CV and
                                 provides personalized, actionable insights to help you advance your career.
                             </p>
                             <p>
-                                Whether you're just starting out, looking to switch roles, or aiming for that next promotion,
+                                Whether you&apos;re just starting out, looking to switch roles, or aiming for that next promotion,
                                 our intelligent analysis helps you understand your strengths, identify skill gaps, and
                                 position yourself for success in the competitive tech industry.
                             </p>
@@ -51,9 +51,9 @@ export default function AboutPage() {
                         </CardHeader>
                         <CardContent className="space-y-4 text-muted-foreground">
                             <p>
-                                The idea for TechCareer.AI came from personal experience. We've all been there -
-                                staring at our CV, wondering if it's good enough, if we're highlighting the right skills,
-                                if we're positioning ourselves correctly for the roles we want.
+                                The idea for TechCareer.AI came from personal experience. We&apos;ve all been there -
+                                staring at our CV, wondering if it&apos;s good enough, if we&apos;re highlighting the right skills,
+                                if we&apos;re positioning ourselves correctly for the roles we want.
                             </p>
                             <p>
                                 Traditional career coaching is expensive and time-consuming. We wanted to democratize
@@ -90,7 +90,7 @@ export default function AboutPage() {
                             </CardHeader>
                             <CardContent>
                                 <CardDescription className="text-base">
-                                    Professional career guidance shouldn't be a luxury. We offer a free tier
+                                    Professional career guidance shouldn&apos;t be a luxury. We offer a free tier
                                     and affordable pricing for everyone.
                                 </CardDescription>
                             </CardContent>
@@ -102,7 +102,7 @@ export default function AboutPage() {
                             </CardHeader>
                             <CardContent>
                                 <CardDescription className="text-base">
-                                    We're constantly improving our AI models and adding new features based on
+                                    We&apos;re constantly improving our AI models and adding new features based on
                                     user feedback and industry trends.
                                 </CardDescription>
                             </CardContent>
@@ -114,7 +114,7 @@ export default function AboutPage() {
                             </CardHeader>
                             <CardContent>
                                 <CardDescription className="text-base">
-                                    We're open about how our AI works and what data we collect. No hidden
+                                    We&apos;re open about how our AI works and what data we collect. No hidden
                                     algorithms or mysterious black boxes.
                                 </CardDescription>
                             </CardContent>
@@ -128,7 +128,7 @@ export default function AboutPage() {
                         <div className="text-center max-w-2xl mx-auto">
                             <h2 className="text-3xl font-bold mb-4">Get in Touch</h2>
                             <p className="text-muted-foreground mb-8">
-                                Have questions, feedback, or just want to say hi? We'd love to hear from you!
+                                Have questions, feedback, or just want to say hi? We&apos;d love to hear from you!
                             </p>
 
                             <div className="flex gap-4 justify-center flex-wrap mb-8">

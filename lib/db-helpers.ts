@@ -104,7 +104,7 @@ export async function insertData<T>(table: string, data: T) {
 // Example: Query data from a table
 export async function queryData<T>(
     table: string,
-    filters?: Record<string, any>
+    filters?: Record<string, string | number | boolean | null>
 ) {
     let query = supabase.from(table).select('*')
 

@@ -25,6 +25,7 @@ export default function CVReviewPage() {
             return
         }
 
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCvContent(content)
         setFilename(name || 'CV')
         setIsLoading(false)

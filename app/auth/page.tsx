@@ -32,7 +32,7 @@ export default function AuthPage() {
         setIsLoading(true)
 
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({
+            const { error } = await supabase.auth.signInWithPassword({
                 email: signInEmail,
                 password: signInPassword,
             })
@@ -131,7 +131,7 @@ export default function AuthPage() {
                                         Check Your Email
                                     </h3>
                                     <p className="text-sm text-green-800 dark:text-green-200 mb-3">
-                                        We've sent a confirmation link to <strong>{signUpEmail}</strong>
+                                        We&apos;ve sent a confirmation link to <strong>{signUpEmail}</strong>
                                     </p>
                                     <p className="text-sm text-green-700 dark:text-green-300">
                                         Click the link in the email to activate your account, then return here to sign in.

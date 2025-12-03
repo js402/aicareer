@@ -38,7 +38,7 @@ export default function PricingPage() {
                 "Market value estimation"
             ],
             cta: "Start Free Trial",
-            href: "/",
+            href: "/checkout",
             popular: true
         },
         {
@@ -74,7 +74,7 @@ export default function PricingPage() {
                             Simple, Transparent Pricing
                         </h1>
                         <p className="text-xl text-muted-foreground">
-                            Choose the plan that's right for you. All plans include our core features.
+                            Choose the plan that&apos;s right for you. All plans include our core features.
                         </p>
                     </div>
 
@@ -84,8 +84,8 @@ export default function PricingPage() {
                             <Card
                                 key={index}
                                 className={`relative border-2 transition-all duration-300 hover:shadow-xl ${plan.popular
-                                        ? 'border-blue-500 shadow-lg scale-105'
-                                        : 'border-slate-200 dark:border-slate-800 hover:border-blue-500/50'
+                                    ? 'border-blue-500 shadow-lg scale-105'
+                                    : 'border-slate-200 dark:border-slate-800 hover:border-blue-500/50'
                                     }`}
                             >
                                 {plan.popular && (
