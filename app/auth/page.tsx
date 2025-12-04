@@ -80,6 +80,9 @@ export default function AuthPage() {
             const { data, error } = await supabase.auth.signUp({
                 email: signUpEmail,
                 password: signUpPassword,
+                options: {
+                    emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+                },
             })
 
             if (error) throw error
