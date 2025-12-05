@@ -29,6 +29,8 @@ export default function JobMatchPage() {
             location: string
             salary_range: string
         }
+        fromCache?: boolean
+        cachedAt?: string
     } | null>(null)
     const [isMatching, setIsMatching] = useState(false)
     const [matchError, setMatchError] = useState('')
@@ -188,7 +190,13 @@ export default function JobMatchPage() {
                             {matchResult && (
                                 <div className="mt-4 space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
                                     {/* Score Section */}
-                                    <div className="flex flex-col items-center justify-center p-8 rounded-2xl bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800">
+                                    <div className="flex flex-col items-center justify-center p-8 rounded-2xl bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 relative">
+                                        {matchResult.fromCache && (
+                                            <div className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs font-medium border border-green-200 dark:border-green-900/50">
+                                                <Sparkles className="h-3 w-3" />
+                                                Cached Result
+                                            </div>
+                                        )}
                                         <MatchScoreCircle score={matchResult.matchScore} />
 
                                         <div className="w-full max-w-lg mt-8 p-6 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">

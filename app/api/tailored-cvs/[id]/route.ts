@@ -1,24 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { withAuth } from '@/lib/api-middleware'
 
-export async function GET(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params
-    const supabase = await createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export const GET = withAuth(async (request, { supabase, user }) => {
+    const id = request.nextUrl.pathname.split('/').pop() || ''
 
     try {
         const { data, error } = await supabase
             .from('tailored_cvs')
             .select('*')
             .eq('id', id)
-            .eq('user_id', session.user.id)
+            .eq('user_id', user.id)
             .single()
 
         if (error) throw error
@@ -31,4 +23,4 @@ export async function GET(
             { status: 500 }
         )
     }
-}
+})

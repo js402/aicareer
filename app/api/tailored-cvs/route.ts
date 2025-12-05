@@ -1,25 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { hasProAccess } from '@/lib/subscription'
+import { withProAccess } from '@/lib/api-middleware'
 import crypto from 'crypto'
 
-export async function POST(request: NextRequest) {
-    const supabase = await createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Check Pro access
-    const isPro = await hasProAccess(supabase, session.user.id)
-    if (!isPro) {
-        return NextResponse.json(
-            { error: 'Saving tailored CVs is a Pro feature' },
-            { status: 403 }
-        )
-    }
-
+export const POST = withProAccess(async (request, { supabase, user }) => {
     try {
         const body = await request.json()
         const { job_position_id, cv_content, tailored_content } = body
@@ -27,6 +11,13 @@ export async function POST(request: NextRequest) {
         if (!job_position_id || !cv_content || !tailored_content) {
             return NextResponse.json(
                 { error: 'Missing required fields' },
+                { status: 400 }
+            )
+        }
+
+        if (tailored_content.trim().length < 50) {
+            return NextResponse.json(
+                { error: 'Tailored content is too short or empty' },
                 { status: 400 }
             )
         }
@@ -54,7 +45,7 @@ export async function POST(request: NextRequest) {
         const { data, error } = await supabase
             .from('tailored_cvs')
             .insert({
-                user_id: session.user.id,
+                user_id: user.id,
                 job_position_id,
                 original_cv_hash,
                 tailored_content,
@@ -74,4 +65,4 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         )
     }
-}
+})

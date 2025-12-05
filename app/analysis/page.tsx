@@ -11,6 +11,7 @@ import { analyzeCV } from "@/lib/api-client"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useCVStore } from "@/hooks/useCVStore"
+import { downloadTextFile } from "@/lib/download-helpers"
 
 export default function AnalysisPage() {
     const router = useRouter()
@@ -73,15 +74,7 @@ export default function AnalysisPage() {
     }, [checkAuthAndLoadCV])
 
     const handleDownload = () => {
-        const blob = new Blob([analysis], { type: 'text/plain' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${filename}-analysis.txt`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
+        downloadTextFile(analysis, `${filename}-analysis.txt`)
     }
 
     const handleNewCV = () => {

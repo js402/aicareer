@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHash } from 'crypto'
 import { openai, DEFAULT_MODEL } from '@/lib/openai'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { withProAccess } from '@/lib/api-middleware'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
-import { hasProAccess } from '@/lib/subscription'
 
 const JOB_MATCH_PROMPT = `You are an expert career advisor and technical recruiter. Your task is to evaluate how well a candidate's CV matches a specific Job Description (JD) AND extract key details from the JD.
 
@@ -22,29 +22,8 @@ Compare the provided CV against the Job Description and return a JSON object wit
 
 Be strict but fair with the score. Focus on key technical requirements and experience levels.`
 
-export async function POST(request: NextRequest) {
+export const POST = withProAccess(async (request: NextRequest, { supabase, user }) => {
     try {
-        const supabase = await createServerSupabaseClient()
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-        if (authError || !user) {
-            return NextResponse.json(
-                {
-                    error: 'Unauthorized - please sign in',
-                    details: authError?.message || 'No user session found'
-                },
-                { status: 401 }
-            )
-        }
-
-        const isPro = await hasProAccess(supabase, user.id)
-        if (!isPro) {
-            return NextResponse.json(
-                { error: 'This feature is available only to Pro subscribers' },
-                { status: 403 }
-            )
-        }
-
         const { cvContent, jobDescription } = await request.json()
 
         if (!cvContent || !jobDescription) {
@@ -52,6 +31,27 @@ export async function POST(request: NextRequest) {
                 { error: 'Both CV content and Job Description are required' },
                 { status: 400 }
             )
+        }
+
+        // Create hashes for caching
+        const cvHash = createHash('sha256').update(cvContent).digest('hex')
+        const jobHash = createHash('sha256').update(jobDescription).digest('hex')
+
+        // Check cache
+        const { data: cachedAnalysis } = await supabase
+            .from('job_match_analyses')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('cv_hash', cvHash)
+            .eq('job_hash', jobHash)
+            .single()
+
+        if (cachedAnalysis) {
+            return NextResponse.json({
+                ...cachedAnalysis.analysis_result,
+                fromCache: true,
+                cachedAt: cachedAnalysis.created_at
+            })
         }
 
         const messages: ChatCompletionMessageParam[] = [
@@ -71,6 +71,15 @@ export async function POST(request: NextRequest) {
 
         const result = JSON.parse(completion.choices[0]?.message?.content || '{}')
 
+        // Cache the result
+        await supabase.from('job_match_analyses').insert({
+            user_id: user.id,
+            cv_hash: cvHash,
+            job_hash: jobHash,
+            match_score: result.matchScore,
+            analysis_result: result
+        })
+
         return NextResponse.json(result)
 
     } catch (error) {
@@ -83,4 +92,4 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         )
     }
-}
+})

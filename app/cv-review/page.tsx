@@ -8,6 +8,7 @@ import { ArrowLeft, FileText, Download } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { supabase } from "@/lib/supabase"
 import { useCVStore } from "@/hooks/useCVStore"
+import { downloadTextFile } from "@/lib/download-helpers"
 
 export default function CVReviewPage() {
     const router = useRouter()
@@ -32,15 +33,7 @@ export default function CVReviewPage() {
     }
 
     const handleDownload = () => {
-        const blob = new Blob([cvContent], { type: 'text/plain' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = filename
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        URL.revokeObjectURL(url)
+        downloadTextFile(cvContent, filename)
     }
 
     const handleContinue = async () => {

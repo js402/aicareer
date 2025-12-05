@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { hasProAccess } from '@/lib/subscription'
+import { withAuth } from '@/lib/api-middleware'
 
-export async function POST(request: NextRequest) {
-    const supabase = await createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
+export const POST = withAuth(async (request, { supabase, user }) => {
     try {
         const body = await request.json()
         const {
@@ -32,13 +27,46 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        // Check for existing position
+        const { data: existing } = await supabase
+            .from('job_positions')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('company_name', company_name)
+            .eq('position_title', position_title)
+            .single()
+
+        if (existing) {
+            return NextResponse.json(existing)
+        }
+
         // Check position limit for free users
-        // TODO: Implement check based on subscription status
+        const isPro = await hasProAccess(supabase, user.id)
+
+        if (!isPro) {
+            const { count, error: countError } = await supabase
+                .from('job_positions')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', user.id)
+
+            if (countError) throw countError
+
+            const FREE_LIMIT = 3
+            if (count !== null && count >= FREE_LIMIT) {
+                return NextResponse.json(
+                    {
+                        error: 'Free tier limit reached',
+                        details: `Free users can only save up to ${FREE_LIMIT} job positions. Please upgrade to Pro for unlimited positions.`
+                    },
+                    { status: 403 }
+                )
+            }
+        }
 
         const { data, error } = await supabase
             .from('job_positions')
             .insert({
-                user_id: session.user.id,
+                user_id: user.id,
                 company_name,
                 position_title,
                 job_description,
@@ -64,16 +92,9 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         )
     }
-}
+})
 
-export async function GET(request: NextRequest) {
-    const supabase = await createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
+export const GET = withAuth(async (request, { supabase, user }) => {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const sort = searchParams.get('sort') || 'created_at'
@@ -83,7 +104,7 @@ export async function GET(request: NextRequest) {
         let query = supabase
             .from('job_positions')
             .select('*')
-            .eq('user_id', session.user.id)
+            .eq('user_id', user.id)
 
         if (status && status !== 'all') {
             query = query.eq('status', status)
@@ -103,4 +124,4 @@ export async function GET(request: NextRequest) {
             { status: 500 }
         )
     }
-}
+})

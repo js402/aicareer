@@ -88,3 +88,54 @@ BEGIN
   END IF;
 END $$;
 
+
+-- Create job_match_analyses table if it doesn't exist
+CREATE TABLE IF NOT EXISTS job_match_analyses (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  cv_hash TEXT NOT NULL,
+  job_hash TEXT NOT NULL,
+  match_score INTEGER NOT NULL,
+  analysis_result JSONB NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Add unique constraint for job matches
+DO $$ 
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'job_match_analyses_user_id_cv_hash_job_hash_key'
+  ) THEN
+    ALTER TABLE job_match_analyses ADD CONSTRAINT job_match_analyses_user_id_cv_hash_job_hash_key UNIQUE(user_id, cv_hash, job_hash);
+  END IF;
+END $$;
+
+-- Create indexes for job matches
+CREATE INDEX IF NOT EXISTS idx_job_match_analyses_hashes ON job_match_analyses(cv_hash, job_hash);
+CREATE INDEX IF NOT EXISTS idx_job_match_analyses_user ON job_match_analyses(user_id);
+
+-- Enable RLS for job_match_analyses
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relname = 'job_match_analyses'
+    AND n.nspname = 'public'
+    AND c.relrowsecurity = true
+  ) THEN
+    ALTER TABLE job_match_analyses ENABLE ROW LEVEL SECURITY;
+  END IF;
+END $$;
+
+-- Policies for job_match_analyses
+DROP POLICY IF EXISTS "Users can view own job matches" ON job_match_analyses;
+CREATE POLICY "Users can view own job matches"
+  ON job_match_analyses FOR SELECT
+  USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own job matches" ON job_match_analyses;
+CREATE POLICY "Users can insert own job matches"
+  ON job_match_analyses FOR INSERT
+  WITH CHECK (auth.uid() = user_id);

@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { withAuth } from '@/lib/api-middleware'
 
-export async function GET(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params
-    const supabase = await createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export const GET = withAuth(async (request, { supabase, user }) => {
+    // Extract ID from URL since withAuth changes the function signature
+    const id = request.nextUrl.pathname.split('/').pop() || ''
 
     try {
         // Fetch position details and associated tailored CVs
@@ -19,7 +12,7 @@ export async function GET(
             .from('job_positions')
             .select('*')
             .eq('id', id)
-            .eq('user_id', session.user.id)
+            .eq('user_id', user.id)
             .single()
 
         if (positionError) throw positionError
@@ -28,7 +21,7 @@ export async function GET(
             .from('tailored_cvs')
             .select('id, version, is_active, created_at')
             .eq('job_position_id', id)
-            .eq('user_id', session.user.id)
+            .eq('user_id', user.id)
             .order('version', { ascending: false })
 
         if (cvsError) throw cvsError
@@ -41,19 +34,10 @@ export async function GET(
             { status: 500 }
         )
     }
-}
+})
 
-export async function PATCH(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params
-    const supabase = await createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export const PATCH = withAuth(async (request, { supabase, user }) => {
+    const id = request.nextUrl.pathname.split('/').pop() || ''
 
     try {
         const body = await request.json()
@@ -69,7 +53,7 @@ export async function PATCH(
             .from('job_positions')
             .update(updates)
             .eq('id', id)
-            .eq('user_id', session.user.id)
+            .eq('user_id', user.id)
             .select()
             .single()
 
@@ -83,26 +67,17 @@ export async function PATCH(
             { status: 500 }
         )
     }
-}
+})
 
-export async function DELETE(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    const { id } = await params
-    const supabase = await createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
-
-    if (!session) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+export const DELETE = withAuth(async (request, { supabase, user }) => {
+    const id = request.nextUrl.pathname.split('/').pop() || ''
 
     try {
         const { error } = await supabase
             .from('job_positions')
             .delete()
             .eq('id', id)
-            .eq('user_id', session.user.id)
+            .eq('user_id', user.id)
 
         if (error) throw error
 
@@ -114,4 +89,4 @@ export async function DELETE(
             { status: 500 }
         )
     }
-}
+})

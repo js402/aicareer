@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { openai, DEFAULT_MODEL } from '@/lib/openai'
 import { hashCV, getCachedAnalysis, storeAnalysis } from '@/lib/cv-cache'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { withAuth } from '@/lib/api-middleware'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 
 // Retry helper function
@@ -97,21 +98,8 @@ interface ValidationResult {
     issues?: string[]
 }
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request, { supabase, user }) => {
     try {
-        const supabase = await createServerSupabaseClient()
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-        if (authError || !user) {
-            return NextResponse.json(
-                {
-                    error: 'Unauthorized - please sign in',
-                    details: authError?.message || 'No user session found'
-                },
-                { status: 401 }
-            )
-        }
-
         const { cvContent } = await request.json()
 
         if (!cvContent) {
@@ -289,4 +277,4 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         )
     }
-}
+})

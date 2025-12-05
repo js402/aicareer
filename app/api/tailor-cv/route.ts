@@ -1,32 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { openai } from '@/lib/openai'
-import { hasProAccess } from '@/lib/subscription'
+import { withProAccess } from '@/lib/api-middleware'
+import { cleanMarkdown } from '@/lib/markdown'
 
-export async function POST(request: NextRequest) {
+export const POST = withProAccess(async (request: NextRequest) => {
     try {
-        const supabase = await createServerSupabaseClient()
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-        if (authError || !user) {
-            return NextResponse.json(
-                {
-                    error: 'Unauthorized - please sign in',
-                    details: authError?.message || 'No user session found'
-                },
-                { status: 401 }
-            )
-        }
-
-        // Check for Pro subscription
-        const isPro = await hasProAccess(supabase, user.id)
-        if (!isPro) {
-            return NextResponse.json(
-                { error: 'This feature is available only to Pro subscribers' },
-                { status: 403 }
-            )
-        }
-
         const { cvContent, jobDescription } = await request.json()
 
         if (!cvContent || !jobDescription) {
@@ -60,7 +38,14 @@ export async function POST(request: NextRequest) {
             temperature: 0.7,
         })
 
-        const tailoredCV = completion.choices[0].message.content
+        let tailoredCV = completion.choices[0].message.content
+
+        if (!tailoredCV) {
+            throw new Error('OpenAI returned empty content')
+        }
+
+        // Clean up markdown code blocks if present
+        tailoredCV = cleanMarkdown(tailoredCV)
 
         return NextResponse.json({ tailoredCV })
 
@@ -71,4 +56,4 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         )
     }
-}
+})
