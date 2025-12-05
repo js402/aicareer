@@ -11,14 +11,9 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Plus, Trash2, User, Mail, Phone, MapPin, Briefcase, GraduationCap, Award, Save, X } from "lucide-react"
 import type { CVMetadataResponse, ExtractedCVInfo } from "@/lib/api-client"
+import { parseContactInfoString, type ContactInfo } from "@/lib/utils"
 
-interface ContactInfo {
-    email?: string
-    phone?: string
-    location?: string
-    linkedin?: string
-    website?: string
-}
+// ContactInfo interface imported from utils
 
 interface ExtractedCVInfoExtended extends Omit<ExtractedCVInfo, 'contactInfo'> {
     contactInfo: ContactInfo
@@ -45,33 +40,14 @@ interface Education {
 export function CVMetadataEditForm({ metadata, onSave, onCancel }: CVMetadataEditFormProps) {
     const [isSaving, setIsSaving] = useState(false)
 
-    // Parse contactInfo using API endpoint
-    const parseContactInfo = async (contactInfo: any): Promise<ContactInfo> => {
+    // Parse contactInfo using shared utility
+    const parseContactInfo = (contactInfo: any): ContactInfo => {
         if (typeof contactInfo === 'object' && contactInfo !== null) {
             return contactInfo
         }
 
-        try {
-            const response = await fetch('/api/parse-contact-info', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ contactInfo }),
-            })
-
-            if (response.ok) {
-                const result = await response.json()
-                return result.parsed || {}
-            }
-        } catch (error) {
-            console.warn('Failed to parse contact info via API, using fallback:', error)
-        }
-
-        // Fallback: simple parsing if API fails
         if (typeof contactInfo === 'string') {
-            const email = contactInfo.match(/[\w.-]+@[\w.-]+\.\w+/)?.[0] || ''
-            const phone = contactInfo.match(/[\+]?[\d\s\-\(\)]{10,}/)?.[0] || ''
-            return { email, phone, location: contactInfo.replace(email, '').replace(phone, '').trim() }
+            return parseContactInfoString(contactInfo)
         }
 
         return {}
@@ -86,13 +62,10 @@ export function CVMetadataEditForm({ metadata, onSave, onCancel }: CVMetadataEdi
 
     // Parse contact info on mount
     useEffect(() => {
-        const initializeContactInfo = async () => {
-            if (typeof metadata.extracted_info.contactInfo === 'string') {
-                const parsed = await parseContactInfo(metadata.extracted_info.contactInfo)
-                setFormData(prev => ({ ...prev, contactInfo: parsed }))
-            }
+        if (typeof metadata.extracted_info.contactInfo === 'string') {
+            const parsed = parseContactInfo(metadata.extracted_info.contactInfo)
+            setFormData(prev => ({ ...prev, contactInfo: parsed }))
         }
-        initializeContactInfo()
     }, [])
 
     const handleSave = async () => {

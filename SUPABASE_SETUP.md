@@ -10,14 +10,13 @@ NEXT_PUBLIC_SUPABASE_URL=your-project-url.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-# OpenAI Configuration
-OPENAI_API_KEY=sk-your-openai-api-key
-
 # Stripe Configuration (for payments)
 STRIPE_PUBLISHABLE_KEY=pk_test_your-stripe-publishable-key
 STRIPE_SECRET_KEY=sk_test_your-stripe-secret-key
 STRIPE_WEBHOOK_SECRET=whsec_your-webhook-secret
 ```
+
+**Note**: You'll also need OpenAI API configuration. See [OPENAI_SETUP.md](./OPENAI_SETUP.md) for details.
 
 ## How to Get Your Supabase Credentials
 
@@ -27,15 +26,6 @@ STRIPE_WEBHOOK_SECRET=whsec_your-webhook-secret
 4. Copy the **Project URL** and paste it as `NEXT_PUBLIC_SUPABASE_URL`
 5. Copy the **anon/public** key and paste it as `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 6. Copy the **service_role** key and paste it as `SUPABASE_SERVICE_ROLE_KEY`
-
-## How to Get Your OpenAI API Key
-
-1. Go to [https://platform.openai.com](https://platform.openai.com)
-2. Sign in or create an account
-3. Navigate to **API Keys** section
-4. Click **Create new secret key**
-5. Copy the key and paste it as `OPENAI_API_KEY`
-6. **Important**: Store this key securely - you won't be able to see it again!
 
 ## Database Setup
 
@@ -170,14 +160,9 @@ WHERE schemaname = 'public';
 - Check that RLS policies are active
 - Ensure authentication is properly configured
 
-**OpenAI API Issues:**
-- Verify your API key is valid and has credits
-- Check rate limits and usage
-- Ensure GPT-4o model access
-
 ### Support
 
 For additional help:
 - Check the [Supabase Documentation](https://supabase.com/docs)
-- Review the [OpenAI API Documentation](https://platform.openai.com/docs)
+- For OpenAI setup issues, see [OPENAI_SETUP.md](./OPENAI_SETUP.md)
 - Check the project issues on GitHub

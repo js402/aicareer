@@ -62,21 +62,10 @@ An intelligent career guidance platform that analyzes CVs, matches job opportuni
    cp .env.example .env.local
    ```
 
-   Configure the following variables:
-   ```env
-   # Supabase
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-
-   # OpenAI
-   OPENAI_API_KEY=your_openai_api_key
-
-   # Stripe
-   STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
-   STRIPE_SECRET_KEY=your_stripe_secret_key
-   STRIPE_WEBHOOK_SECRET=your_webhook_secret
-   ```
+   Configure your environment variables by following these setup guides:
+   - **[Supabase Setup](./SUPABASE_SETUP.md)** - Database and authentication
+   - **[OpenAI Setup](./OPENAI_SETUP.md)** - AI model configuration
+   - **[Stripe Setup](./STRIPE_SETUP.md)** - Payment processing
 
 4. **Database Setup**
    ```bash
@@ -213,9 +202,7 @@ See [SUPABASE_SETUP.md](./SUPABASE_SETUP.md) for detailed database configuration
 See [STRIPE_SETUP.md](./STRIPE_SETUP.md) for payment processing setup.
 
 ### OpenAI Configuration
-- Uses GPT-4o for analysis
-- Configurable model via `DEFAULT_MODEL` in `lib/openai.ts`
-- Rate limiting and error handling included
+See [OPENAI_SETUP.md](./OPENAI_SETUP.md) for AI model setup and configuration.
 
 ## 🧪 Testing
 
