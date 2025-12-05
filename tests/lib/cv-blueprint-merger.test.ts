@@ -3,13 +3,15 @@ import { mergeCVIntoBlueprint } from '@/lib/cv-blueprint-merger'
 
 const mockSupabase = {
     from: vi.fn(),
-    rpc: vi.fn().mockResolvedValue({ data: 'blueprint-123', error: null })
+    rpc: vi.fn()
 }
 
 describe('CV Blueprint Merger', () => {
     beforeEach(() => {
         vi.clearAllMocks()
-        mockSupabase.rpc.mockResolvedValue('blueprint-123')
+        // Reset RPC mock for each test
+        mockSupabase.rpc.mockReset()
+        mockSupabase.rpc.mockResolvedValue({ data: 'blueprint-123', error: null })
     })
 
     describe('mergeCVIntoBlueprint', () => {

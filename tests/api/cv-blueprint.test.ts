@@ -29,23 +29,27 @@ describe('CV Blueprint API', () => {
 
     describe('GET /api/cv-blueprint', () => {
         it('should return existing blueprint', async () => {
-            const mockBlueprint = {
-                id: 'blueprint_123',
-                user_id: 'user_123',
-                profile_data: {
-                    personal: { name: 'John Doe' },
-                    contact: { email: 'john@example.com' },
-                    experience: [],
-                    education: [],
-                    skills: ['JavaScript']
-                },
-                total_cvs_processed: 2,
-                confidence_score: 0.8,
-                data_completeness: 0.75,
-                blueprint_version: 3,
-                created_at: '2024-01-01T00:00:00Z',
-                updated_at: '2024-01-02T00:00:00Z'
+        const mockBlueprint = {
+            id: 'blueprint_123',
+            user_id: 'user_123',
+            profile_data: {
+                personal: { name: 'John Doe' },
+                contact: { email: 'john@example.com' },
+                experience: [],
+                education: [],
+                skills: ['JavaScript']
+            },
+            total_cvs_processed: 2,
+            confidence_score: 0.8,
+            data_completeness: 0.75,
+            blueprint_version: 3,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-02T00:00:00Z',
+            displayPercentages: {
+                confidencePercent: 80,
+                completenessPercent: 75
             }
+        }
 
             mockSupabase.from.mockReturnValue({
                 select: vi.fn().mockReturnThis(),
@@ -64,23 +68,27 @@ describe('CV Blueprint API', () => {
 
         it('should create new blueprint if none exists', async () => {
             const newBlueprintId = 'new_blueprint_123'
-            const mockBlueprint = {
-                id: newBlueprintId,
-                user_id: 'user_123',
-                profile_data: {
-                    personal: {},
-                    contact: {},
-                    experience: [],
-                    education: [],
-                    skills: []
-                },
-                total_cvs_processed: 0,
-                confidence_score: 0.0,
-                data_completeness: 0.0,
-                blueprint_version: 1,
-                created_at: '2024-01-01T00:00:00Z',
-                updated_at: '2024-01-01T00:00:00Z'
+        const mockBlueprint = {
+            id: newBlueprintId,
+            user_id: 'user_123',
+            profile_data: {
+                personal: {},
+                contact: {},
+                experience: [],
+                education: [],
+                skills: []
+            },
+            total_cvs_processed: 0,
+            confidence_score: 0.0,
+            data_completeness: 0.0,
+            blueprint_version: 1,
+            created_at: '2024-01-01T00:00:00Z',
+            updated_at: '2024-01-01T00:00:00Z',
+            displayPercentages: {
+                confidencePercent: 0,
+                completenessPercent: 0
             }
+        }
 
             // Mock blueprint creation
             mockSupabase.rpc.mockResolvedValue(newBlueprintId)
@@ -130,13 +138,19 @@ describe('CV Blueprint API', () => {
                 }
             }
 
-            // Mock the blueprint operations
+            // Mock the blueprint operations and RPC call
+            mockSupabase.rpc.mockResolvedValue({ data: 'blueprint_123', error: null })
             mockSupabase.from.mockImplementation((table) => {
                 if (table === 'cv_blueprints') {
                     return {
                         select: vi.fn().mockReturnThis(),
                         eq: vi.fn().mockReturnThis(),
-                        single: vi.fn().mockResolvedValue({ data: { id: 'blueprint_123' }, error: null })
+                        single: vi.fn().mockResolvedValue({ data: { id: 'blueprint_123' }, error: null }),
+                        update: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnThis(),
+                            select: vi.fn().mockReturnThis(),
+                            single: vi.fn().mockResolvedValue({ data: { id: 'blueprint_123', profile_data: {} }, error: null })
+                        })
                     }
                 }
                 return {}
