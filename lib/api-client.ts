@@ -41,10 +41,13 @@ export interface ExtractedCVInfo {
 
 export interface ExtractCVMetadataResponse {
     extractedInfo: ExtractedCVInfo
-    status: 'valid' | 'incomplete' | 'invalid' | 'error'
+    status: 'valid' | 'incomplete' | 'invalid' | 'error' | 'cached'
     questions?: string[]
     message?: string
     error?: string
+    cachedAt?: string
+    extractionStatus?: string
+    confidenceScore?: number
 }
 
 export async function analyzeCV(
@@ -242,6 +245,35 @@ export async function processCVIntoBlueprint(
     }
 
     return response.json()
+}
+
+/**
+ * Unified CV processing endpoint
+ */
+export interface ProcessCVResponse {
+    status: 'processed' | 'error'
+    extractedInfo?: ExtractedCVInfo
+    extractionStatus?: string
+    blueprintUpdated?: boolean
+    nextStep?: 'analysis' | 'auth'
+    message?: string
+    error?: string
+}
+
+export async function processCV(cvContent: string): Promise<ProcessCVResponse> {
+    const response = await fetch('/api/process-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ cvContent }),
+    });
+
+    if (!response.ok) {
+        const error: AnalyzeCVError = await response.json();
+        throw new Error(error.error || 'Failed to process CV');
+    }
+
+    return response.json();
 }
 
 /**

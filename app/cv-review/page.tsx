@@ -11,7 +11,7 @@ import { supabase } from "@/lib/supabase"
 import { useCVStore } from "@/hooks/useCVStore"
 import { useSubscription } from "@/hooks/useSubscription"
 import { downloadTextFile } from "@/lib/download-helpers"
-import { extractCVMetadata, processCVIntoBlueprint } from "@/lib/api-client"
+import { processCV } from "@/lib/api-client"
 import { hashCV } from "@/lib/cv-cache"
 import { CVMetadataDisplay } from "@/components/cv-metadata-display"
 import type { ExtractedCVInfo } from "@/lib/api-client"
@@ -43,48 +43,32 @@ export default function CVReviewPage() {
         }
     }, [cvContent])
 
-    // Extract metadata when CV content is available
+    // Process CV through unified API endpoint
     useEffect(() => {
-        const extractMetadata = async () => {
+        const processCVData = async () => {
             if (!cvContent || extractedInfo || isExtractingMetadata || extractionAttempted) return
 
             setIsExtractingMetadata(true)
             setExtractionAttempted(true)
             setMetadataError('')
 
-            // Generate hash for this CV
-            const cvHash = await hashCV(cvContent)
-
             try {
-                const result = await extractCVMetadata(cvContent)
-                if (result.status === 'valid' && result.extractedInfo) {
+                const result = await processCV(cvContent)
+
+                if (result.status === 'processed' && result.extractedInfo) {
                     setExtractedInfo(result.extractedInfo)
 
-                    // Process CV into blueprint for learning
-                    try {
-                        await processCVIntoBlueprint(result.extractedInfo, cvHash)
-                        console.log('CV successfully processed into blueprint')
-                    } catch (blueprintError) {
-                        console.warn('Failed to process CV into blueprint:', blueprintError)
-                        // Don't fail the whole process if blueprint processing fails
+                    if (result.extractionStatus === 'incomplete') {
+                        setMetadataError('CV appears to be incomplete. Some information may be missing, but you can still proceed with analysis.')
                     }
-                } else if (result.status === 'incomplete') {
-                    // Still save partial info for incomplete CVs
-                    if (result.extractedInfo) {
-                        setExtractedInfo(result.extractedInfo)
 
-                        // Still try to process into blueprint even if incomplete
-                        try {
-                            await processCVIntoBlueprint(result.extractedInfo, cvHash)
-                        } catch (blueprintError) {
-                            console.warn('Failed to process incomplete CV into blueprint:', blueprintError)
-                        }
-                    }
-                    setMetadataError('CV appears to be incomplete. Some information may be missing, but you can still proceed with analysis.')
-                } else if (result.status === 'invalid') {
-                    // For invalid CVs, show error but allow user to proceed (full analysis will validate again)
-                    setMetadataError(result.message || 'This doesn\'t appear to be a valid CV, but you can still try analysis.')
-                    // Still set empty extracted info to prevent re-attempts
+                    console.log('CV processed successfully', {
+                        blueprintUpdated: result.blueprintUpdated,
+                        nextStep: result.nextStep
+                    })
+                } else if (result.status === 'error') {
+                    setMetadataError(result.message || 'Failed to process CV. You can still try analysis.')
+                    // Set empty extracted info to prevent re-attempts
                     setExtractedInfo({
                         name: '',
                         contactInfo: '',
@@ -94,8 +78,8 @@ export default function CVReviewPage() {
                     })
                 }
             } catch (error) {
-                console.error('Error extracting metadata:', error)
-                setMetadataError('Failed to extract CV information. You can still proceed with analysis.')
+                console.error('Error processing CV:', error)
+                setMetadataError('Failed to process CV. You can still proceed with analysis.')
                 // Set empty extracted info to prevent infinite retries
                 setExtractedInfo({
                     name: '',
@@ -110,7 +94,7 @@ export default function CVReviewPage() {
         }
 
         if (isMounted && cvContent && !extractedInfo && !extractionAttempted) {
-            extractMetadata()
+            processCVData()
         }
     }, [cvContent, extractedInfo, isMounted, setExtractedInfo, extractionAttempted])
 
@@ -126,14 +110,14 @@ export default function CVReviewPage() {
     }
 
     const handleContinue = async () => {
-        // Check if user is already logged in
-        const { data: { session } } = await supabase.auth.getSession()
+        try {
+            const response = await fetch('/api/auth/check?redirect=analysis')
+            const authStatus = await response.json()
 
-        if (session) {
-            // User is logged in, go directly to analysis
-            router.push('/analysis')
-        } else {
-            // User not logged in, go to auth page with redirect parameter
+            router.push(authStatus.redirectUrl)
+        } catch (error) {
+            console.error('Auth check failed:', error)
+            // Fallback to auth page
             router.push('/auth?redirect=analysis')
         }
     }

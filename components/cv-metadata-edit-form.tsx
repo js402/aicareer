@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -45,21 +45,55 @@ interface Education {
 export function CVMetadataEditForm({ metadata, onSave, onCancel }: CVMetadataEditFormProps) {
     const [isSaving, setIsSaving] = useState(false)
 
-    // Parse contactInfo if it's a string, otherwise assume it's already structured
-    const parseContactInfo = (contactInfo: any): ContactInfo => {
+    // Parse contactInfo using API endpoint
+    const parseContactInfo = async (contactInfo: any): Promise<ContactInfo> => {
+        if (typeof contactInfo === 'object' && contactInfo !== null) {
+            return contactInfo
+        }
+
+        try {
+            const response = await fetch('/api/parse-contact-info', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ contactInfo }),
+            })
+
+            if (response.ok) {
+                const result = await response.json()
+                return result.parsed || {}
+            }
+        } catch (error) {
+            console.warn('Failed to parse contact info via API, using fallback:', error)
+        }
+
+        // Fallback: simple parsing if API fails
         if (typeof contactInfo === 'string') {
-            // Try to parse common patterns
             const email = contactInfo.match(/[\w.-]+@[\w.-]+\.\w+/)?.[0] || ''
             const phone = contactInfo.match(/[\+]?[\d\s\-\(\)]{10,}/)?.[0] || ''
             return { email, phone, location: contactInfo.replace(email, '').replace(phone, '').trim() }
         }
-        return contactInfo || {}
+
+        return {}
     }
 
     const [formData, setFormData] = useState<ExtractedCVInfoExtended>({
         ...metadata.extracted_info,
-        contactInfo: parseContactInfo(metadata.extracted_info.contactInfo)
+        contactInfo: typeof metadata.extracted_info.contactInfo === 'object'
+            ? metadata.extracted_info.contactInfo
+            : {} // Will be populated by useEffect
     })
+
+    // Parse contact info on mount
+    useEffect(() => {
+        const initializeContactInfo = async () => {
+            if (typeof metadata.extracted_info.contactInfo === 'string') {
+                const parsed = await parseContactInfo(metadata.extracted_info.contactInfo)
+                setFormData(prev => ({ ...prev, contactInfo: parsed }))
+            }
+        }
+        initializeContactInfo()
+    }, [])
 
     const handleSave = async () => {
         setIsSaving(true)

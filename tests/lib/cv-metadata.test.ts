@@ -102,7 +102,13 @@ describe('CV Metadata Library', () => {
         })
 
         it('should handle storage errors', async () => {
-            const extractedInfo = { name: 'John Doe' }
+            const extractedInfo = {
+                name: 'John Doe',
+                contactInfo: 'john@example.com',
+                experience: [],
+                skills: [],
+                education: []
+            }
 
             mockSupabase.from.mockReturnValue({
                 upsert: vi.fn().mockReturnValue({

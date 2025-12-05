@@ -59,8 +59,10 @@ export function BlueprintStatus({ compact = false, showProgress = true }: Bluepr
         )
     }
 
-    const confidencePercent = Math.round((blueprint.confidence_score || 0) * 100)
-    const completenessPercent = Math.round((blueprint.data_completeness || 0) * 100)
+    const confidencePercent = blueprint.displayPercentages?.confidencePercent ??
+        Math.round((blueprint.confidence_score || 0) * 100)
+    const completenessPercent = blueprint.displayPercentages?.completenessPercent ??
+        Math.round((blueprint.data_completeness || 0) * 100)
 
     if (compact) {
         return (

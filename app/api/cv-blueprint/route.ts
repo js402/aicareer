@@ -38,8 +38,17 @@ export const GET = withAuth(async (request, { supabase, user }) => {
             })
         }
 
+        // Calculate display percentages
+        const blueprintWithCalculations = {
+            ...blueprint,
+            displayPercentages: {
+                confidencePercent: Math.round((blueprint.confidence_score || 0) * 100),
+                completenessPercent: Math.round((blueprint.data_completeness || 0) * 100)
+            }
+        }
+
         return NextResponse.json({
-            blueprint,
+            blueprint: blueprintWithCalculations,
             isNew: false
         })
     } catch (error) {

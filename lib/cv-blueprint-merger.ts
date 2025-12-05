@@ -59,16 +59,28 @@ export async function mergeCVIntoBlueprint(
     cvHash: string
 ): Promise<MergeResult> {
     // Get or create blueprint
-    const { data: blueprintId } = await supabase.rpc('get_or_create_cv_blueprint', {
+    const { data: blueprintId, error: blueprintError } = await supabase.rpc('get_or_create_cv_blueprint', {
         p_user_id: userId
     })
 
+    if (blueprintError) {
+        throw new Error(`Failed to get or create blueprint: ${blueprintError.message}`)
+    }
+
+    if (!blueprintId) {
+        throw new Error('Failed to get blueprint ID from RPC call')
+    }
+
     // Get current blueprint
-    const { data: currentBlueprint } = await supabase
+    const { data: currentBlueprint, error: fetchError } = await supabase
         .from('cv_blueprints')
         .select('*')
         .eq('id', blueprintId)
         .single()
+
+    if (fetchError) {
+        throw new Error(`Failed to fetch blueprint: ${fetchError.message}`)
+    }
 
     const currentProfile: BlueprintProfile = currentBlueprint?.profile_data || {
         personal: {},
