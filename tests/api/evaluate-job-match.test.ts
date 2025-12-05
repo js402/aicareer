@@ -39,12 +39,47 @@ describe('evaluate-job-match API', () => {
     beforeEach(() => {
         // Setup Supabase mock
         supabaseMock = {
-            from: vi.fn().mockReturnThis(),
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
+            from: vi.fn(),
+            select: vi.fn(),
+            eq: vi.fn(),
             single: vi.fn(),
-            insert: vi.fn().mockResolvedValue({ error: null })
+            insert: vi.fn().mockResolvedValue({ error: null }),
+            rpc: vi.fn()
         };
+
+        // Mock the blueprint fetching and job match caching
+        supabaseMock.from.mockImplementation((table: string) => {
+            if (table === 'cv_blueprints') {
+                return {
+                    select: vi.fn().mockReturnThis(),
+                    eq: vi.fn().mockReturnThis(),
+                    single: vi.fn().mockResolvedValue({
+                        data: {
+                            id: 'blueprint-123',
+                            profile_data: {
+                                personal: { name: 'John Doe' },
+                                contact: { email: 'john@example.com' },
+                                experience: [{ role: 'Developer', company: 'Tech Corp', duration: '2020-2024' }],
+                                education: [{ degree: 'BS', institution: 'University', year: '2020' }],
+                                skills: ['JavaScript', 'React']
+                            },
+                            confidence_score: 0.8
+                        },
+                        error: null
+                    })
+                }
+            }
+            if (table === 'job_match_analyses') {
+                return {
+                    select: vi.fn().mockReturnThis(),
+                    eq: vi.fn().mockReturnThis(),
+                    single: supabaseMock.single,
+                    insert: supabaseMock.insert
+                }
+            }
+            return supabaseMock
+        });
+
         (global as any).supabaseMock = supabaseMock
     })
 
@@ -90,7 +125,6 @@ describe('evaluate-job-match API', () => {
         const req = new NextRequest('http://localhost/api/evaluate-job-match', {
             method: 'POST',
             body: JSON.stringify({
-                cvContent: 'CV Content',
                 jobDescription: 'Job Description'
             })
         })
@@ -154,7 +188,6 @@ describe('evaluate-job-match API', () => {
         const req = new NextRequest('http://localhost/api/evaluate-job-match', {
             method: 'POST',
             body: JSON.stringify({
-                cvContent: 'CV Content',
                 jobDescription: 'Job Description'
             })
         })
@@ -171,7 +204,7 @@ describe('evaluate-job-match API', () => {
         expect(supabaseMock.from).toHaveBeenCalledWith('job_match_analyses')
         expect(supabaseMock.insert).toHaveBeenCalledWith({
             user_id: 'test-user-id',
-            cv_hash: 'mock-hash',
+            cv_hash: 'mock-hash', // This will be the blueprint hash now
             job_hash: 'mock-hash',
             match_score: 90,
             analysis_result: newResult

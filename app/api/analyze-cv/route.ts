@@ -294,7 +294,7 @@ export const POST = withAuth(async (request, { supabase, user }) => {
         return NextResponse.json({
             analysis,
             fromCache: false,
-            validation: validation.extractedInfo,
+            extractedInfo: validation.extractedInfo,
             qualityCheck: qualityCheck.isValid ? 'passed' : 'warning',
         })
     } catch (error) {

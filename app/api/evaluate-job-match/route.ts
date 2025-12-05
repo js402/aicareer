@@ -4,6 +4,64 @@ import { openai, DEFAULT_MODEL } from '@/lib/openai'
 import { withProAccess } from '@/lib/api-middleware'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 
+/**
+ * Format blueprint data into readable CV format for analysis
+ */
+function formatBlueprintForAnalysis(blueprintData: any): string {
+    const sections: string[] = []
+
+    // Personal Info
+    if (blueprintData.personal?.name) {
+        sections.push(`Name: ${blueprintData.personal.name}`)
+    }
+
+    if (blueprintData.personal?.summary) {
+        sections.push(`Professional Summary: ${blueprintData.personal.summary}`)
+    }
+
+    // Contact Info
+    const contactParts: string[] = []
+    if (blueprintData.contact?.email) contactParts.push(`Email: ${blueprintData.contact.email}`)
+    if (blueprintData.contact?.phone) contactParts.push(`Phone: ${blueprintData.contact.phone}`)
+    if (blueprintData.contact?.location) contactParts.push(`Location: ${blueprintData.contact.location}`)
+    if (blueprintData.contact?.linkedin) contactParts.push(`LinkedIn: ${blueprintData.contact.linkedin}`)
+    if (blueprintData.contact?.website) contactParts.push(`Website: ${blueprintData.contact.website}`)
+
+    if (contactParts.length > 0) {
+        sections.push(`Contact Information:\n${contactParts.join('\n')}`)
+    }
+
+    // Skills
+    if (blueprintData.skills && blueprintData.skills.length > 0) {
+        const skillsText = blueprintData.skills
+            .sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))
+            .map((skill: any) => skill.name)
+            .join(', ')
+        sections.push(`Skills: ${skillsText}`)
+    }
+
+    // Experience
+    if (blueprintData.experience && blueprintData.experience.length > 0) {
+        const experienceText = blueprintData.experience
+            .map((exp: any) =>
+                `${exp.role} at ${exp.company} (${exp.duration})` +
+                (exp.description ? `\n  ${exp.description}` : '')
+            )
+            .join('\n\n')
+        sections.push(`Professional Experience:\n${experienceText}`)
+    }
+
+    // Education
+    if (blueprintData.education && blueprintData.education.length > 0) {
+        const educationText = blueprintData.education
+            .map((edu: any) => `${edu.degree} from ${edu.institution} (${edu.year})`)
+            .join('\n')
+        sections.push(`Education:\n${educationText}`)
+    }
+
+    return sections.join('\n\n')
+}
+
 const JOB_MATCH_PROMPT = `
 You are an expert career advisor, HR analyst, and technical recruiter.  
 Your task is to evaluate how well a candidate's CV matches a specific Job Description (JD), with strong emphasis on:
@@ -59,17 +117,31 @@ Your output MUST be valid JSON with no explanations outside the JSON block.
 
 export const POST = withProAccess(async (request: NextRequest, { supabase, user }) => {
     try {
-        const { cvContent, jobDescription } = await request.json()
+        const { jobDescription } = await request.json()
 
-        if (!cvContent || !jobDescription) {
+        if (!jobDescription) {
             return NextResponse.json(
-                { error: 'Both CV content and Job Description are required' },
+                { error: 'Job Description is required' },
                 { status: 400 }
             )
         }
 
-        // Create hashes for caching
-        const cvHash = createHash('sha256').update(cvContent).digest('hex')
+        // Get user's blueprint
+        const { data: blueprint } = await supabase
+            .from('cv_blueprints')
+            .select('*')
+            .eq('user_id', user.id)
+            .single()
+
+        if (!blueprint) {
+            return NextResponse.json(
+                { error: 'No CV blueprint found. Please upload a CV first.' },
+                { status: 400 }
+            )
+        }
+
+        // Create hashes for caching (blueprint version + job)
+        const cvHash = createHash('sha256').update(JSON.stringify(blueprint.profile_data)).digest('hex')
         const jobHash = createHash('sha256').update(jobDescription).digest('hex')
 
         // Check cache
@@ -89,11 +161,15 @@ export const POST = withProAccess(async (request: NextRequest, { supabase, user 
             })
         }
 
+        // Format blueprint data for analysis
+        const blueprintData = blueprint.profile_data
+        const cvSummary = formatBlueprintForAnalysis(blueprintData)
+
         const messages: ChatCompletionMessageParam[] = [
             { role: 'system', content: JOB_MATCH_PROMPT },
             {
                 role: 'user',
-                content: `CV Content:\n${cvContent}\n\nJob Description:\n${jobDescription}`
+                content: `Candidate Profile (from accumulated CV data):\n${cvSummary}\n\nJob Description:\n${jobDescription}`
             }
         ]
 

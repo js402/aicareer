@@ -4,26 +4,14 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ModeToggle } from "@/components/mode-toggle"
 import { supabase } from "@/lib/supabase"
 import { User } from "@supabase/supabase-js"
-import { LogOut, User as UserIcon, Crown, Clock } from "lucide-react"
-import { useSubscription } from "@/hooks/useSubscription"
-import { useCVStore } from "@/hooks/useCVStore"
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { UserNav } from "@/components/user-nav"
 
 export function Navbar() {
     const router = useRouter()
     const [user, setUser] = useState<User | null>(null)
     const [isLoading, setIsLoading] = useState(true)
-    const { hasProAccess, isTrialing } = useSubscription()
 
     useEffect(() => {
         // Get initial session
@@ -41,14 +29,6 @@ export function Navbar() {
 
         return () => subscription.unsubscribe()
     }, [])
-
-    const handleSignOut = async () => {
-        // Clear CV data from local storage for security
-        useCVStore.getState().clear()
-
-        await supabase.auth.signOut()
-        router.push('/')
-    }
 
     return (
         <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -70,79 +50,20 @@ export function Navbar() {
                     </nav>
                 </div>
                 <div className="flex items-center gap-4">
-                    <nav className="flex items-center gap-2">
-                        <ModeToggle />
-
-                        {!isLoading && (
-                            user ? (
-                                // Logged in state
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="sm" className="gap-2">
-                                            <UserIcon className="h-4 w-4" />
-                                            <span className="hidden sm:inline-block">
-                                                {user.email?.split('@')[0]}
-                                            </span>
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        <DropdownMenuLabel>
-                                            {user.email}
-                                        </DropdownMenuLabel>
-                                        <div className="px-2 py-1.5">
-                                            {hasProAccess ? (
-                                                <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-200 dark:border-purple-800">
-                                                    {isTrialing ? (
-                                                        <>
-                                                            <Clock className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                                                            <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                                                                Trial Active
-                                                            </span>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Crown className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                                                            <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
-                                                                Pro Member
-                                                            </span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800">
-                                                    <span className="text-xs font-medium text-muted-foreground">
-                                                        Free Plan
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem onClick={() => router.push('/analysis')}>
-                                            My Analysis
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => router.push('/positions')}>
-                                            My Applications
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem onClick={handleSignOut} className="text-red-600 dark:text-red-400">
-                                            <LogOut className="mr-2 h-4 w-4" />
-                                            Sign Out
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            ) : (
-                                // Logged out state
-                                <>
-                                    <Button variant="ghost" size="sm" onClick={() => router.push('/auth')}>
-                                        Sign In
-                                    </Button>
-                                    <Button size="sm" onClick={() => router.push('/')}>
-                                        Get Started
-                                    </Button>
-                                </>
-                            )
-                        )}
-                    </nav>
+                    {!isLoading && (
+                        user ? (
+                            <UserNav user={user} />
+                        ) : (
+                            <nav className="flex items-center gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => router.push('/auth')}>
+                                    Sign In
+                                </Button>
+                                <Button size="sm" onClick={() => router.push('/')}>
+                                    Get Started
+                                </Button>
+                            </nav>
+                        )
+                    )}
                 </div>
             </div>
         </header>
