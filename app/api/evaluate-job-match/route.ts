@@ -4,23 +4,58 @@ import { openai, DEFAULT_MODEL } from '@/lib/openai'
 import { withProAccess } from '@/lib/api-middleware'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 
-const JOB_MATCH_PROMPT = `You are an expert career advisor and technical recruiter. Your task is to evaluate how well a candidate's CV matches a specific Job Description (JD) AND extract key details from the JD.
+const JOB_MATCH_PROMPT = `
+You are an expert career advisor, HR analyst, and technical recruiter.  
+Your task is to evaluate how well a candidate's CV matches a specific Job Description (JD), with strong emphasis on:
+- Required skills  
+- Years of experience (if the cantidate has formal education but the job descriptions does not require formal education, you should add 1 year of experience) 
+- Seniority level  
+- Technical depth  
+- Industry/domain match  
+- Responsibilities  
+- Tools, frameworks, and methodologies  
+- Certifications or education level  
 
-Compare the provided CV against the Job Description and return a JSON object with the following structure:
+Using the CV and Job Description provided by the user, produce a JSON object with the following structure:
+
 {
-  "matchScore": number, // A score from 0 to 100 representing the fit
-  "matchingSkills": string[], // List of skills from the JD that the candidate possesses
-  "missingSkills": string[], // List of important skills from the JD that are missing or weak in the CV
-  "recommendations": string[], // 3-5 actionable tips to improve the CV for this specific job
+  "matchScore": number, // 0–100 weighted score based on skills, seniority, experience, responsibilities, and domain relevance
+  "matchingSkills": string[], // Skills explicitly required in the JD that the CV clearly demonstrates
+  "missingSkills": string[], // Skills the JD requires but the CV lacks or mentions weakly
+  "experienceAlignment": {
+    "seniorityMatch": "Underqualified" | "Good Fit" | "Overqualified",
+    "yearsExperienceRequired": number | null,
+    "yearsExperienceCandidate": number | null,
+    "comment": string // Brief explanation of seniority/experience fit
+  },
+  "responsibilityAlignment": {
+    "matchingResponsibilities": string[], // Responsibilities the CV has done before
+    "missingResponsibilities": string[] // Responsibilities required but not shown in CV
+  },
+  "recommendations": string[], // 3–5 highly specific recommendations for improving the CV for this job
   "metadata": {
-    "company_name": string, // Extracted company name (or "Unknown Company" if not found)
-    "position_title": string, // Extracted job title (or "Unknown Position" if not found)
-    "location": string, // Extracted location (or "Remote" / "Unknown" if not found)
-    "salary_range": string // Extracted salary range (or "Not specified" if not found)
+    "company_name": string,
+    "position_title": string,
+    "location": string,
+    "salary_range": string,
+    "employment_type": string | null, // Full-time, Contract, Internship, etc.
+    "seniority_level": string | null // e.g., Junior, Mid, Senior, Lead, Principal, Director, C-level
   }
 }
 
-Be strict but fair with the score. Focus on key technical requirements and experience levels.`
+Scoring rules:
+- Use strict but fair evaluation.
+- Missing **core** technical skills should heavily reduce the matchScore.
+- Seniority mismatch (e.g., JD asks for 8+ years but candidate has 2) should significantly impact rating.
+- Soft skills should only influence the score minimally.
+- If the JD is vague, infer reasonable expectations and state assumptions.
+
+Extraction rules:
+- Extract metadata **even if implied**.
+- If something is not found, return a reasonable fallback like "Unknown" or null.
+
+Your output MUST be valid JSON with no explanations outside the JSON block.
+`
 
 export const POST = withProAccess(async (request: NextRequest, { supabase, user }) => {
     try {

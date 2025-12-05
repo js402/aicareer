@@ -11,6 +11,7 @@ import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { PremiumBadge } from "@/components/analysis/premium-badge"
 import { MatchScoreCircle } from "@/components/analysis/match-score-circle"
 import { SkillListCard } from "@/components/analysis/skill-list-card"
+import { JobMatchAnalysis } from "@/components/analysis/JobMatchAnalysis"
 import { ErrorAlert } from "@/components/analysis/error-alert"
 import { Input } from "@/components/ui/input"
 
@@ -22,12 +23,24 @@ export default function JobMatchPage() {
         matchScore: number
         matchingSkills: string[]
         missingSkills: string[]
+        experienceAlignment: {
+            seniorityMatch: "Underqualified" | "Good Fit" | "Overqualified"
+            yearsExperienceRequired: number | null
+            yearsExperienceCandidate: number | null
+            comment: string
+        }
+        responsibilityAlignment: {
+            matchingResponsibilities: string[]
+            missingResponsibilities: string[]
+        }
         recommendations: string[]
         metadata: {
             company_name: string
             position_title: string
             location: string
             salary_range: string
+            employment_type: string | null
+            seniority_level: string | null
         }
         fromCache?: boolean
         cachedAt?: string
@@ -41,7 +54,9 @@ export default function JobMatchPage() {
         company_name: '',
         position_title: '',
         location: '',
-        salary_range: ''
+        salary_range: '',
+        employment_type: '',
+        seniority_level: ''
     })
 
     useAuthGuard({ redirectTo: 'analysis/job-match', requireCV: true, cvContent })
@@ -95,7 +110,11 @@ export default function JobMatchPage() {
                     match_score: matchResult.matchScore,
                     matching_skills: matchResult.matchingSkills,
                     missing_skills: matchResult.missingSkills,
-                    recommendations: matchResult.recommendations
+                    recommendations: matchResult.recommendations,
+                    experience_alignment: matchResult.experienceAlignment,
+                    responsibility_alignment: matchResult.responsibilityAlignment,
+                    employment_type: editedMetadata.employment_type,
+                    seniority_level: editedMetadata.seniority_level
                 })
             })
 
@@ -247,6 +266,26 @@ export default function JobMatchPage() {
                                                         </div>
                                                     </div>
                                                 </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <label className="text-xs font-medium text-muted-foreground">Employment Type</label>
+                                                        <Input
+                                                            value={editedMetadata.employment_type}
+                                                            onChange={(e) => setEditedMetadata({ ...editedMetadata, employment_type: e.target.value })}
+                                                            className="bg-white dark:bg-slate-900"
+                                                            placeholder="e.g. Full-time"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <label className="text-xs font-medium text-muted-foreground">Seniority Level</label>
+                                                        <Input
+                                                            value={editedMetadata.seniority_level}
+                                                            onChange={(e) => setEditedMetadata({ ...editedMetadata, seniority_level: e.target.value })}
+                                                            className="bg-white dark:bg-slate-900"
+                                                            placeholder="e.g. Senior"
+                                                        />
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -279,25 +318,7 @@ export default function JobMatchPage() {
                                         </div>
                                     </div>
 
-                                    <div className="grid md:grid-cols-2 gap-6">
-                                        <SkillListCard
-                                            title="Matching Skills"
-                                            skills={matchResult.matchingSkills}
-                                            variant="matching"
-                                        />
-
-                                        <SkillListCard
-                                            title="Missing / Weak Areas"
-                                            skills={matchResult.missingSkills}
-                                            variant="missing"
-                                        />
-                                    </div>
-
-                                    <SkillListCard
-                                        title="Recommendations"
-                                        skills={matchResult.recommendations}
-                                        variant="recommendations"
-                                    />
+                                    <JobMatchAnalysis result={matchResult} />
                                 </div>
                             )}
                         </div>

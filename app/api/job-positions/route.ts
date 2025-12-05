@@ -16,7 +16,11 @@ export const POST = withAuth(async (request, { supabase, user }) => {
             match_score,
             matching_skills,
             missing_skills,
-            recommendations
+            recommendations,
+            experience_alignment,
+            responsibility_alignment,
+            employment_type,
+            seniority_level
         } = body
 
         // Validate required fields
@@ -77,6 +81,10 @@ export const POST = withAuth(async (request, { supabase, user }) => {
                 matching_skills,
                 missing_skills,
                 recommendations,
+                experience_alignment,
+                responsibility_alignment,
+                employment_type,
+                seniority_level,
                 status: 'saved'
             })
             .select()

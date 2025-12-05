@@ -73,13 +73,30 @@ export const DELETE = withAuth(async (request, { supabase, user }) => {
     const id = request.nextUrl.pathname.split('/').pop() || ''
 
     try {
-        const { error } = await supabase
+        // First, clear submitted_cv_id to break circular dependency
+        const { error: updateError } = await supabase
             .from('job_positions')
-            .delete()
+            .update({ submitted_cv_id: null })
+            .eq('id', id)
+            .eq('user_id', user.id)
+
+        if (updateError) throw updateError
+
+        // Now delete the job position (cascade will delete tailored_cvs)
+        const { error, count } = await supabase
+            .from('job_positions')
+            .delete({ count: 'exact' })
             .eq('id', id)
             .eq('user_id', user.id)
 
         if (error) throw error
+
+        if (count === 0) {
+            return NextResponse.json(
+                { error: 'Job position not found or permission denied' },
+                { status: 404 }
+            )
+        }
 
         return NextResponse.json({ success: true })
     } catch (error) {

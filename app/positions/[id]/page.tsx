@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from "@/components/ui/button"
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, ExternalLink, MapPin, Building2, Download, Sparkles, Loader2, Trash2, Printer } from "lucide-react"
+import { Sparkles, Loader2 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PositionHeader } from "@/components/positions/PositionHeader"
+import { TailoredCVList } from "@/components/positions/TailoredCVList"
+import { CVViewModal } from "@/components/positions/CVViewModal"
+import { NotesCard } from "@/components/positions/NotesCard"
 import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { MatchScoreCircle } from "@/components/analysis/match-score-circle"
 import { SkillListCard } from "@/components/analysis/skill-list-card"
@@ -17,6 +18,17 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cleanMarkdown } from "@/lib/markdown"
 import { downloadMarkdown } from "@/lib/download-helpers"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { JobMatchAnalysis, JobMatchResult } from "@/components/analysis/JobMatchAnalysis"
 
 interface TailoredCV {
     id: string
@@ -38,6 +50,10 @@ interface Position {
     matching_skills: string[]
     missing_skills: string[]
     recommendations: string[]
+    experience_alignment?: JobMatchResult['experienceAlignment']
+    responsibility_alignment?: JobMatchResult['responsibilityAlignment']
+    employment_type?: string
+    seniority_level?: string
     status: string
     applied_date?: string
     notes?: string
@@ -60,6 +76,9 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     // View Modal State
     const [viewingCV, setViewingCV] = useState<TailoredCV | null>(null)
     const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+
+    // Delete Confirmation Dialog State
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
     useEffect(() => {
         const fetchPosition = async () => {
@@ -122,9 +141,12 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
         }
     }
 
-    const handleDelete = async () => {
-        if (!confirm('Are you sure you want to delete this position? This action cannot be undone.')) return
 
+    const handleDeleteClick = () => {
+        setIsDeleteDialogOpen(true)
+    }
+
+    const handleDeleteConfirm = async () => {
         try {
             const response = await fetch(`/api/job-positions/${id}`, {
                 method: 'DELETE'
@@ -140,8 +162,11 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
         } catch (error) {
             console.error('Error deleting position:', error)
             alert('An error occurred while deleting the position.')
+        } finally {
+            setIsDeleteDialogOpen(false)
         }
     }
+
 
     const handleGenerateCV = async () => {
         if (!position || !cvContent) return
@@ -155,7 +180,13 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     cvContent,
-                    jobDescription: position.job_description
+                    jobDescription: position.job_description,
+                    matchAnalysis: {
+                        matchScore: position.match_score,
+                        matchingSkills: position.matching_skills,
+                        missingSkills: position.missing_skills,
+                        recommendations: position.recommendations
+                    }
                 })
             })
 
@@ -230,174 +261,6 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
         }
     }
 
-    const handlePrint = () => {
-        // Create a hidden iframe to print
-        const printContent = document.getElementById('cv-preview-content')
-        if (!printContent) return
-
-        const printWindow = window.open('', '_blank')
-        if (!printWindow) return
-
-        printWindow.document.write(`
-            <html>
-                <head>
-                    <title>Tailored CV - ${position?.company_name} - ${position?.position_title}</title>
-                    <style>
-                        @page {
-                            margin: 2cm;
-                            size: A4;
-                        }
-                        body { 
-                            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
-                            line-height: 1.6; 
-                            color: #333;
-                            max-width: 210mm;
-                            margin: 0 auto;
-                            background: white;
-                        }
-                        /* Reset some default browser styles */
-                        * { box-sizing: border-box; }
-                        
-                        /* Header Styling */
-                        h1 { 
-                            font-size: 24pt; 
-                            font-weight: 700; 
-                            margin-bottom: 0.5em; 
-                            color: #111;
-                            text-transform: uppercase;
-                            letter-spacing: 1px;
-                            border-bottom: 2px solid #333;
-                            padding-bottom: 10px;
-                        }
-                        
-                        h2 { 
-                            font-size: 16pt; 
-                            font-weight: 600; 
-                            margin-top: 1.5em; 
-                            margin-bottom: 0.75em; 
-                            color: #2c3e50;
-                            border-bottom: 1px solid #eee;
-                            padding-bottom: 5px;
-                            text-transform: uppercase;
-                            letter-spacing: 0.5px;
-                        }
-                        
-                        h3 { 
-                            font-size: 13pt; 
-                            font-weight: 600; 
-                            margin-top: 1.2em; 
-                            margin-bottom: 0.5em; 
-                            color: #444;
-                        }
-                        
-                        /* Content Styling */
-                        p { 
-                            margin-bottom: 0.8em; 
-                            text-align: justify;
-                        }
-                        
-                        ul { 
-                            list-style-type: disc; 
-                            padding-left: 1.2em; 
-                            margin-bottom: 1em; 
-                        }
-                        
-                        li { 
-                            margin-bottom: 0.4em; 
-                            padding-left: 0.2em;
-                        }
-                        
-                        strong {
-                            font-weight: 600;
-                            color: #000;
-                        }
-                        
-                        /* Tables */
-                        table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            margin-bottom: 1em;
-                        }
-                        
-                        th, td {
-                            border: 1px solid #ddd;
-                            padding: 8px;
-                            text-align: left;
-                        }
-                        
-                        th {
-                            background-color: #f2f2f2;
-                            font-weight: 600;
-                        }
-                        
-                        /* Blockquotes */
-                        blockquote {
-                            border-left: 4px solid #ccc;
-                            margin: 0 0 1em 0;
-                            padding-left: 1em;
-                            color: #666;
-                            font-style: italic;
-                        }
-                        
-                        /* Code blocks */
-                        pre {
-                            background-color: #f5f5f5;
-                            padding: 10px;
-                            border-radius: 4px;
-                            overflow-x: auto;
-                            margin-bottom: 1em;
-                        }
-                        
-                        code {
-                            font-family: 'Courier New', Courier, monospace;
-                            background-color: #f5f5f5;
-                            padding: 2px 4px;
-                            border-radius: 2px;
-                            font-size: 0.9em;
-                        }
-                        
-                        pre code {
-                            background-color: transparent;
-                            padding: 0;
-                        }
-                        
-                        /* Links */
-                        a {
-                            color: #2563eb;
-                            text-decoration: none;
-                        }
-                        
-                        /* Print optimizations */
-                        @media print {
-                            body { 
-                                padding: 0; 
-                                margin: 0;
-                                width: 100%;
-                            }
-                            @page {
-                                margin: 1.5cm;
-                            }
-                            a {
-                                text-decoration: none;
-                                color: #000;
-                            }
-                        }
-                    </style>
-                </head>
-                <body>
-                    ${printContent.innerHTML}
-                </body>
-            </html>
-        `)
-        printWindow.document.close()
-        // Wait for resources to load
-        setTimeout(() => {
-            printWindow.focus()
-            printWindow.print()
-            printWindow.close()
-        }, 250)
-    }
-
     const handleMarkAsSubmitted = async (cvId: string) => {
         if (!position) return
 
@@ -444,70 +307,12 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
             <Navbar />
 
             <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
-                {/* Header */}
-                <div className="mb-8">
-                    <Button
-                        variant="ghost"
-                        onClick={() => router.push('/positions')}
-                        className="mb-4 pl-0 hover:bg-transparent hover:text-blue-600"
-                    >
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Positions
-                    </Button>
-
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div>
-                            <h1 className="text-3xl font-bold mb-2">{position.position_title}</h1>
-                            <div className="flex items-center gap-4 text-muted-foreground">
-                                <div className="flex items-center">
-                                    <Building2 className="h-4 w-4 mr-2" />
-                                    {position.company_name}
-                                </div>
-                                {position.location && (
-                                    <div className="flex items-center">
-                                        <MapPin className="h-4 w-4 mr-2" />
-                                        {position.location}
-                                    </div>
-                                )}
-                                {position.job_url && (
-                                    <a
-                                        href={position.job_url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center hover:text-blue-600 transition-colors"
-                                    >
-                                        <ExternalLink className="h-4 w-4 mr-2" />
-                                        View Job Post
-                                    </a>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <Select
-                                value={position.status}
-                                onValueChange={handleStatusChange}
-                                disabled={isUpdating}
-                            >
-                                <SelectTrigger className="w-[180px] bg-white dark:bg-slate-900">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="saved">Saved</SelectItem>
-                                    <SelectItem value="applied">Applied</SelectItem>
-                                    <SelectItem value="interviewing">Interviewing</SelectItem>
-                                    <SelectItem value="offer">Offer Received</SelectItem>
-                                    <SelectItem value="rejected">Rejected</SelectItem>
-                                    <SelectItem value="withdrawn">Withdrawn</SelectItem>
-                                </SelectContent>
-                            </Select>
-
-                            <Button variant="destructive" size="icon" onClick={handleDelete}>
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+                <PositionHeader
+                    position={position}
+                    onStatusChange={handleStatusChange}
+                    onDelete={handleDeleteClick}
+                    isUpdating={isUpdating}
+                />
 
                 <div className="grid lg:grid-cols-3 gap-8">
                     {/* Main Content */}
@@ -548,16 +353,22 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
                                         </div>
 
                                         <div className="space-y-6">
-                                            <SkillListCard
-                                                title="Missing / Weak Areas"
-                                                skills={position.missing_skills || []}
-                                                variant="missing"
-                                            />
-                                            <SkillListCard
-                                                title="Recommendations"
-                                                skills={position.recommendations || []}
-                                                variant="recommendations"
-                                            />
+                                            <JobMatchAnalysis result={{
+                                                matchScore: position.match_score,
+                                                matchingSkills: position.matching_skills || [],
+                                                missingSkills: position.missing_skills || [],
+                                                recommendations: position.recommendations || [],
+                                                experienceAlignment: position.experience_alignment,
+                                                responsibilityAlignment: position.responsibility_alignment,
+                                                metadata: {
+                                                    company_name: position.company_name,
+                                                    position_title: position.position_title,
+                                                    location: position.location || '',
+                                                    salary_range: position.salary_range || '',
+                                                    employment_type: position.employment_type || null,
+                                                    seniority_level: position.seniority_level || null
+                                                }
+                                            }} />
                                         </div>
                                     </CardContent>
                                 </Card>
@@ -582,187 +393,55 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
 
                     {/* Sidebar */}
                     <div className="space-y-6">
-                        {/* Tailored CVs */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg">Tailored CVs</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <Button
-                                    className="w-full bg-purple-600 hover:bg-purple-700"
-                                    onClick={handleGenerateCV}
-                                    disabled={isGenerating || !cvContent}
-                                >
-                                    {isGenerating ? (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            Generating...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Sparkles className="mr-2 h-4 w-4" />
-                                            Generate New Version
-                                        </>
-                                    )}
-                                </Button>
+                        <TailoredCVList
+                            cvs={position.tailored_cvs}
+                            submittedCvId={submittedCvId}
+                            isGenerating={isGenerating}
+                            canGenerate={!!cvContent}
+                            onGenerate={handleGenerateCV}
+                            onView={handleViewCV}
+                            onDownload={handleDownloadCV}
+                            onMarkAsSubmitted={handleMarkAsSubmitted}
+                        />
 
-                                <div className="space-y-3">
-                                    {position.tailored_cvs?.map((cv) => {
-                                        const isSubmitted = cv.id === submittedCvId
-                                        return (
-                                            <div
-                                                key={cv.id}
-                                                className={`p-3 rounded-lg border transition-all ${isSubmitted
-                                                    ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-900/50'
-                                                    : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-medium text-sm">Version {cv.version}</span>
-                                                            {isSubmitted && (
-                                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 font-medium">
-                                                                    Submitted
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            {new Date(cv.created_at).toLocaleDateString()}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex gap-1">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8"
-                                                            onClick={() => handleViewCV(cv)}
-                                                            title="View Content"
-                                                        >
-                                                            <ExternalLink className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8"
-                                                            onClick={() => handleDownloadCV(cv.id, cv.version)}
-                                                            title="Download Markdown"
-                                                        >
-                                                            <Download className="h-4 w-4" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-
-                                                {!isSubmitted && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="w-full h-7 text-xs"
-                                                        onClick={() => handleMarkAsSubmitted(cv.id)}
-                                                    >
-                                                        Mark as Submitted
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        )
-                                    })}
-                                    {(!position.tailored_cvs || position.tailored_cvs.length === 0) && (
-                                        <div className="text-center text-sm text-muted-foreground py-4">
-                                            No tailored CVs generated yet.
-                                        </div>
-                                    )}
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Notes */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-lg">Notes</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <Textarea
-                                    placeholder="Add notes about this application..."
-                                    className="min-h-[150px] mb-2"
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                />
-                                <Button
-                                    size="sm"
-                                    className="w-full"
-                                    onClick={handleNotesSave}
-                                    disabled={isUpdating}
-                                >
-                                    Save Notes
-                                </Button>
-                            </CardContent>
-                        </Card>
+                        <NotesCard
+                            notes={notes}
+                            onNotesChange={setNotes}
+                            onSave={handleNotesSave}
+                            isUpdating={isUpdating}
+                        />
                     </div>
                 </div>
 
-                {/* View CV Modal */}
-                {isViewModalOpen && viewingCV && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in backdrop-blur-sm">
-                        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
-                            <div className="flex items-center justify-between p-4 border-b dark:border-slate-800">
-                                <div>
-                                    <h3 className="font-semibold text-lg">
-                                        Tailored CV - Version {viewingCV.version}
-                                    </h3>
-                                    <p className="text-xs text-muted-foreground">
-                                        Previewing generated content
-                                    </p>
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handlePrint}
-                                    >
-                                        <Printer className="mr-2 h-4 w-4" />
-                                        Print / PDF
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setIsViewModalOpen(false)}
-                                    >
-                                        Close
-                                    </Button>
-                                </div>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-8 bg-slate-100 dark:bg-slate-950/50">
-                                <div className="max-w-[210mm] mx-auto bg-white dark:bg-slate-900 shadow-lg p-[20mm] min-h-[297mm]">
-                                    <div id="cv-preview-content" className="prose dark:prose-invert max-w-none">
-                                        {viewingCV.tailored_content ? (
-                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                {cleanMarkdown(viewingCV.tailored_content)}
-                                            </ReactMarkdown>
-                                        ) : (
-                                            <div className="text-center py-12 text-muted-foreground">
-                                                <p>No content available for this version.</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="p-4 border-t dark:border-slate-800 flex justify-end gap-2 bg-white dark:bg-slate-900 rounded-b-xl">
-                                <Button
-                                    variant="outline"
-                                    onClick={() => setIsViewModalOpen(false)}
-                                >
-                                    Close
-                                </Button>
-                                <Button
-                                    onClick={() => handleDownloadCV(viewingCV.id, viewingCV.version)}
-                                >
-                                    <Download className="mr-2 h-4 w-4" />
-                                    Download Markdown
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <CVViewModal
+                    cv={viewingCV}
+                    isOpen={isViewModalOpen}
+                    companyName={position.company_name}
+                    positionTitle={position.position_title}
+                    onClose={() => setIsViewModalOpen(false)}
+                    onDownload={handleDownloadCV}
+                />
+
+                <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Job Position</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Are you sure you want to delete this position? This will permanently delete
+                                the job position and all associated tailored CVs. This action cannot be undone.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={handleDeleteConfirm}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                Delete
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </main>
         </div>
     )

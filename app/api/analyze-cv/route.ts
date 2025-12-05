@@ -31,22 +31,31 @@ async function retryWithBackoff<T>(
 
 
 // Step 1: Input Validation Prompt
-const INPUT_VALIDATION_PROMPT = `You are a CV structure validator. Extract and validate the following information from the CV:
+const INPUT_VALIDATION_PROMPT = `You are a CV structure validator. Your job is to:
+1. Determine if the input is a valid CV/Resume or professional profile.
+2. If it is NOT a CV (e.g., random text, code, a poem, a recipe), mark it as INVALID.
+3. If it IS a CV but has significant gaps (missing name, missing contact info, very sparse experience, missing dates), mark it as INCOMPLETE and generate specific questions to ask the user.
+4. If it is a complete and valid CV, mark it as VALID and extract the information.
 
 Return a JSON object with:
 {
-  "isValid": boolean,
+  "status": "valid" | "incomplete" | "invalid",
+  "missingInfoQuestions": string[], // If incomplete, list 3-5 specific questions to gather missing info
+  "rejectionReason": string, // If invalid, explain why (e.g., "This appears to be a python script, not a CV")
   "extractedInfo": {
     "name": string,
     "contactInfo": string,
     "experience": Array<{role: string, company: string, duration: string}>,
     "skills": string[],
     "education": Array<{degree: string, institution: string, year: string}>
-  },
-  "issues": string[] // List any missing or problematic sections
+  }
 }
 
-If critical information is missing (name, experience, or skills), set isValid to false.`
+Rules:
+- Status "invalid": Use this for completely irrelevant content.
+- Status "incomplete": Use this if it looks like a CV but is missing core fields like Name, Contact Info, or has no Experience/Education listed.
+- Status "valid": Use this if it has at least Name, Contact Info, and some Experience or Education.
+`
 
 // Step 2: Analysis Generation Prompt
 const ANALYSIS_GENERATION_PROMPT = `You are an expert career advisor and CV analyst. Based on the validated CV structure, provide a comprehensive analysis in markdown format.
@@ -93,7 +102,9 @@ Return JSON:
 }`
 
 interface ValidationResult {
-    isValid: boolean
+    status: 'valid' | 'incomplete' | 'invalid'
+    missingInfoQuestions?: string[]
+    rejectionReason?: string
     extractedInfo?: Record<string, unknown>
     issues?: string[]
 }
@@ -118,6 +129,7 @@ export const POST = withAuth(async (request, { supabase, user }) => {
                 fromCache: true,
                 cachedAt: cachedResult.created_at,
                 filename: cachedResult.filename,
+                status: 'valid'
             })
         }
 
@@ -141,7 +153,7 @@ export const POST = withAuth(async (request, { supabase, user }) => {
                     })
                     messages.push({
                         role: 'user',
-                        content: `The previous validation had issues: ${validation.issues?.join(', ') || 'Invalid structure'}. Please try again and fix these issues.`
+                        content: `The previous validation had issues. Please try again.`
                     })
                 }
 
@@ -154,15 +166,11 @@ export const POST = withAuth(async (request, { supabase, user }) => {
 
                 validation = JSON.parse(validationCompletion.choices[0]?.message?.content || '{}') as ValidationResult
 
-                if (validation?.isValid) {
+                if (validation?.status) {
                     break // Success!
                 }
 
                 validationAttempt++
-                if (validationAttempt < maxValidationAttempts) {
-                    console.log(`CV validation failed (attempt ${validationAttempt}/${maxValidationAttempts}), retrying with error feedback...`)
-                    await new Promise(resolve => setTimeout(resolve, 1000))
-                }
             } catch (error) {
                 validationAttempt++
                 if (validationAttempt >= maxValidationAttempts) {
@@ -173,13 +181,36 @@ export const POST = withAuth(async (request, { supabase, user }) => {
             }
         }
 
-        if (!validation?.isValid) {
+        // Handle Invalid or Incomplete CVs
+        if (validation?.status === 'invalid') {
             return NextResponse.json(
                 {
-                    error: 'CV validation failed',
-                    issues: validation?.issues || ['Unable to extract required information from CV']
+                    error: 'Invalid CV format',
+                    message: validation.rejectionReason || 'The uploaded file does not appear to be a valid CV.',
+                    status: 'invalid'
                 },
                 { status: 400 }
+            )
+        }
+
+        if (validation?.status === 'incomplete') {
+            return NextResponse.json(
+                {
+                    message: 'CV is incomplete',
+                    questions: validation.missingInfoQuestions || ['Please provide more details about your experience.'],
+                    status: 'incomplete'
+                },
+                { status: 200 } // Return 200 so frontend can handle it gracefully
+            )
+        }
+
+        if (!validation?.extractedInfo) {
+            return NextResponse.json(
+                {
+                    error: 'Failed to extract information',
+                    status: 'error'
+                },
+                { status: 500 }
             )
         }
 

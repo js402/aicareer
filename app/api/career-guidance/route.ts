@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { hasProAccess } from '@/lib/subscription'
 import { rateLimit } from '@/middleware/rateLimit'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import { hashCV } from '@/lib/cv-cache'
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -135,6 +136,23 @@ export async function POST(req: NextRequest) {
             )
         }
 
+        // Check cache first
+        const cvHash = await hashCV(cvContent)
+        const { data: cachedGuidance } = await supabase
+            .from('career_guidance')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('cv_hash', cvHash)
+            .single()
+
+        if (cachedGuidance) {
+            return NextResponse.json({
+                guidance: cachedGuidance.guidance,
+                fromCache: true,
+                cachedAt: cachedGuidance.created_at
+            })
+        }
+
         // STEP 1: Extract career information (with smart retry)
         let careerInfo: Record<string, unknown> | undefined
         let extractionAttempt = 0
@@ -246,13 +264,10 @@ ${JSON.stringify(guidance, null, 2)}`
         // Store in database for caching
         await supabase
             .from('career_guidance')
-            .upsert({
+            .insert({
                 user_id: user.id,
-                cv_hash: hashCV(cvContent),
+                cv_hash: cvHash,
                 guidance,
-                updated_at: new Date().toISOString(),
-            }, {
-                onConflict: 'user_id,cv_hash'
             })
 
         return NextResponse.json({
@@ -269,13 +284,4 @@ ${JSON.stringify(guidance, null, 2)}`
     }
 }
 
-// Simple hash function for CV content
-function hashCV(content: string): string {
-    let hash = 0
-    for (let i = 0; i < content.length; i++) {
-        const char = content.charCodeAt(i)
-        hash = ((hash << 5) - hash) + char
-        hash = hash & hash
-    }
-    return hash.toString(36)
-}
+

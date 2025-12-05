@@ -12,6 +12,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useCVStore } from "@/hooks/useCVStore"
 import { downloadTextFile } from "@/lib/download-helpers"
+import { MissingInfoModal } from "@/components/analysis/MissingInfoModal"
 
 export default function AnalysisPage() {
     const router = useRouter()
@@ -22,21 +23,72 @@ export default function AnalysisPage() {
     const [fromCache, setFromCache] = useState<boolean>(false)
     const [cachedAt, setCachedAt] = useState<string | undefined>()
 
+    const [missingInfoQuestions, setMissingInfoQuestions] = useState<string[]>([])
+    const [isMissingInfoModalOpen, setIsMissingInfoModalOpen] = useState(false)
+    const [isResubmitting, setIsResubmitting] = useState(false)
+
     const startAnalysis = useCallback(async (content: string) => {
         setIsAnalyzing(true)
         setError('')
 
         try {
             const result = await analyzeCV(content)
+
+            if (result.status === 'incomplete' && result.questions) {
+                setMissingInfoQuestions(result.questions)
+                setIsMissingInfoModalOpen(true)
+                setIsAnalyzing(false) // Stop loading indicator while user answers
+                return
+            }
+
+            if (result.status === 'invalid') {
+                setError(result.message || 'Invalid CV format')
+                return
+            }
+
             setAnalysis(result.analysis)
             setFromCache(result.fromCache)
             setCachedAt(result.cachedAt)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to analyze CV')
         } finally {
+            if (!isMissingInfoModalOpen) {
+                setIsAnalyzing(false)
+            }
+        }
+    }, [setAnalysis, isMissingInfoModalOpen])
+
+    const handleMissingInfoSubmit = async (answers: string[]) => {
+        setIsResubmitting(true)
+        setIsMissingInfoModalOpen(false)
+        setIsAnalyzing(true)
+
+        // Combine original content with answers
+        const additionalContext = `\n\nADDITIONAL USER CONTEXT:\n${answers.map((a, i) => `Q: ${missingInfoQuestions[i]}\nA: ${a}`).join('\n')}`
+        const augmentedContent = cvContent + additionalContext
+
+        try {
+            // We pass the augmented content as a "custom prompt" or just append it to the CV content
+            // Since the API takes cvContent, we'll just send the augmented content as the CV
+            // But we should probably update the store too? Or just use it for this request?
+            // Let's just send it for this request.
+            const result = await analyzeCV(augmentedContent)
+
+            // If it's still incomplete, we might want to loop, but for now let's assume it's good or just show what we got
+            if (result.status === 'invalid') {
+                setError(result.message || 'Invalid CV format')
+            } else {
+                setAnalysis(result.analysis)
+                setFromCache(result.fromCache)
+                setCachedAt(result.cachedAt)
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to analyze CV')
+        } finally {
+            setIsResubmitting(false)
             setIsAnalyzing(false)
         }
-    }, [setAnalysis])
+    }
 
     const checkAuthAndLoadCV = useCallback(async () => {
         // Check if user is authenticated
@@ -240,6 +292,18 @@ export default function AnalysisPage() {
                         Analyze Another CV
                     </Button>
                 </div>
+
+                {/* Missing Info Modal */}
+                <MissingInfoModal
+                    isOpen={isMissingInfoModalOpen}
+                    questions={missingInfoQuestions}
+                    onSubmit={handleMissingInfoSubmit}
+                    onCancel={() => {
+                        setIsMissingInfoModalOpen(false)
+                        handleNewCV()
+                    }}
+                    isSubmitting={isResubmitting}
+                />
             </main>
         </div>
     )

@@ -57,8 +57,25 @@ describe('evaluate-job-match API', () => {
             matchScore: 85,
             matchingSkills: ['React'],
             missingSkills: ['Vue'],
+            experienceAlignment: {
+                seniorityMatch: "Good Fit",
+                yearsExperienceRequired: 3,
+                yearsExperienceCandidate: 4,
+                comment: "Candidate meets experience requirements"
+            },
+            responsibilityAlignment: {
+                matchingResponsibilities: ["Frontend dev"],
+                missingResponsibilities: ["Team lead"]
+            },
             recommendations: ['Learn Vue'],
-            metadata: {}
+            metadata: {
+                company_name: "Tech Corp",
+                position_title: "Frontend Dev",
+                location: "Remote",
+                salary_range: "$100k-120k",
+                employment_type: "Full-time",
+                seniority_level: "Mid"
+            }
         }
 
         // Mock cache hit
@@ -97,8 +114,25 @@ describe('evaluate-job-match API', () => {
             matchScore: 90,
             matchingSkills: ['Node.js'],
             missingSkills: [],
+            experienceAlignment: {
+                seniorityMatch: "Good Fit",
+                yearsExperienceRequired: 5,
+                yearsExperienceCandidate: 5,
+                comment: "Perfect match"
+            },
+            responsibilityAlignment: {
+                matchingResponsibilities: ["Backend dev"],
+                missingResponsibilities: []
+            },
             recommendations: [],
-            metadata: {}
+            metadata: {
+                company_name: "Node Corp",
+                position_title: "Backend Dev",
+                location: "NY",
+                salary_range: "$120k-140k",
+                employment_type: "Full-time",
+                seniority_level: "Senior"
+            }
         }
 
         // Mock cache miss

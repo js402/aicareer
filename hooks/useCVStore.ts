@@ -22,7 +22,7 @@ export const useCVStore = create<CVStore>()(
             analysis: '',
             guidance: null,
             jobDescription: '',
-            setCV: (content, filename) => set({ content, filename }),
+            setCV: (content, filename) => set({ content, filename, analysis: '', guidance: null }),
             setAnalysis: (analysis) => set({ analysis }),
             setGuidance: (guidance) => set({ guidance }),
             setJobDescription: (jobDescription) => set({ jobDescription }),

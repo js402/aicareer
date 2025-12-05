@@ -13,6 +13,9 @@ export interface AnalyzeCVResponse {
     }
     model?: string
     filename?: string
+    status?: 'valid' | 'incomplete' | 'invalid'
+    questions?: string[]
+    message?: string
 }
 
 export interface AnalyzeCVError {
