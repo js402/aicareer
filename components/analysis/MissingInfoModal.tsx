@@ -1,5 +1,6 @@
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
+'use client'
+
+import { useState } from 'react'
 import {
     Dialog,
     DialogContent,
@@ -8,9 +9,11 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2 } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { Loader2, HelpCircle } from "lucide-react"
 
 interface MissingInfoModalProps {
     isOpen: boolean
@@ -27,7 +30,7 @@ export function MissingInfoModal({
     onCancel,
     isSubmitting
 }: MissingInfoModalProps) {
-    const [answers, setAnswers] = useState<string[]>(new Array(questions.length).fill(''))
+    const [answers, setAnswers] = useState<string[]>(questions.map(() => ''))
 
     const handleAnswerChange = (index: number, value: string) => {
         const newAnswers = [...answers]
@@ -36,43 +39,83 @@ export function MissingInfoModal({
     }
 
     const handleSubmit = () => {
-        onSubmit(answers)
+        if (answers.every(answer => answer.trim() !== '')) {
+            onSubmit(answers)
+            setAnswers(questions.map(() => '')) // Reset for next time
+        } else {
+            alert('Please answer all questions before submitting.')
+        }
+    }
+
+    const handleCancel = () => {
+        setAnswers(questions.map(() => ''))
+        onCancel()
     }
 
     return (
-        <Dialog open={isOpen} onOpenChange={(open) => !open && onCancel()}>
-            <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
+        <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Complete Your Profile</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                        <HelpCircle className="h-5 w-5 text-blue-600" />
+                        Additional Information Needed
+                    </DialogTitle>
                     <DialogDescription>
-                        We noticed some gaps in your CV. Please answer a few questions to help us generate a better analysis.
+                        Your CV appears to be incomplete. Please provide additional details to get a better analysis.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="grid gap-6 py-4">
+                <div className="space-y-6 py-4">
                     {questions.map((question, index) => (
-                        <div key={index} className="grid gap-2">
-                            <Label htmlFor={`question-${index}`} className="font-medium leading-relaxed">
+                        <div key={index} className="space-y-2">
+                            <Label htmlFor={`question-${index}`} className="font-medium">
                                 {index + 1}. {question}
                             </Label>
-                            <Textarea
-                                id={`question-${index}`}
-                                value={answers[index]}
-                                onChange={(e) => handleAnswerChange(index, e.target.value)}
-                                placeholder="Type your answer here..."
-                                className="min-h-[100px]"
-                            />
+                            {question.toLowerCase().includes('describe') ||
+                                question.toLowerCase().includes('explain') ||
+                                question.toLowerCase().includes('tell') ? (
+                                <Textarea
+                                    id={`question-${index}`}
+                                    value={answers[index]}
+                                    onChange={(e) => handleAnswerChange(index, e.target.value)}
+                                    placeholder="Type your answer here..."
+                                    className="min-h-[80px]"
+                                    disabled={isSubmitting}
+                                />
+                            ) : (
+                                <Input
+                                    id={`question-${index}`}
+                                    value={answers[index]}
+                                    onChange={(e) => handleAnswerChange(index, e.target.value)}
+                                    placeholder="Type your answer here..."
+                                    disabled={isSubmitting}
+                                />
+                            )}
                         </div>
                     ))}
                 </div>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={onCancel} disabled={isSubmitting}>
+                <DialogFooter className="gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={handleCancel}
+                        disabled={isSubmitting}
+                    >
                         Cancel
                     </Button>
-                    <Button onClick={handleSubmit} disabled={isSubmitting}>
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Submit & Analyze
+                    <Button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting || answers.some(answer => answer.trim() === '')}
+                        className="bg-blue-600 hover:bg-blue-700"
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Processing...
+                            </>
+                        ) : (
+                            'Submit and Continue'
+                        )}
                     </Button>
                 </DialogFooter>
             </DialogContent>

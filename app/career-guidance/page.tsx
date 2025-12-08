@@ -9,61 +9,17 @@ import { ArrowLeft, Sparkles, Map, Target, TrendingUp, Loader2, Download } from 
 import { useSubscription } from '@/hooks/useSubscription'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCVStore } from "@/hooks/useCVStore"
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 // Define more specific types for the guidance content
-type GuidanceContent = string | string[] | Record<string, unknown>
+type GuidanceContent = string
 
 // Exporting to satisfy linter if needed, or just remove if not used elsewhere
 export interface CareerGuidance {
     strategicPath: GuidanceContent
     marketValue: GuidanceContent
     skillGap: GuidanceContent
-}
-
-// Helper function to render content based on type
-const renderContent = (content: unknown, depth: number = 0): React.ReactNode => {
-    if (content === null || content === undefined) {
-        return null
-    }
-
-    // If it's a string, render it directly
-    if (typeof content === 'string') {
-        return <p className="whitespace-pre-wrap">{content}</p>
-    }
-
-    // If it's an array, render as a list
-    if (Array.isArray(content)) {
-        return (
-            <ul className="list-disc list-inside space-y-1">
-                {content.map((item, index) => (
-                    <li key={index}>
-                        {typeof item === 'string' ? item : renderContent(item, depth + 1)}
-                    </li>
-                ))}
-            </ul>
-        )
-    }
-
-    // If it's an object, render key-value pairs
-    if (typeof content === 'object') {
-        return (
-            <div className="space-y-3">
-                {Object.entries(content as Record<string, unknown>).map(([key, value]) => (
-                    <div key={key}>
-                        <h4 className="font-semibold text-sm capitalize mb-1">
-                            {key.replace(/([A-Z])/g, ' $1').trim()}
-                        </h4>
-                        <div className="ml-4">
-                            {renderContent(value, depth + 1)}
-                        </div>
-                    </div>
-                ))}
-            </div>
-        )
-    }
-
-    // Fallback for other types
-    return <span>{String(content)}</span>
 }
 
 export default function CareerGuidancePage() {
@@ -308,7 +264,9 @@ ${JSON.stringify(guidance.skillGap, null, 2)}
                                 </CardHeader>
                                 <CardContent>
                                     <div className="prose prose-sm dark:prose-invert max-w-none">
-                                        {renderContent(guidance.strategicPath)}
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                            {String(guidance.strategicPath || '')}
+                                        </ReactMarkdown>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -324,7 +282,9 @@ ${JSON.stringify(guidance.skillGap, null, 2)}
                                 </CardHeader>
                                 <CardContent>
                                     <div className="prose prose-sm dark:prose-invert max-w-none">
-                                        {renderContent(guidance.marketValue)}
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                            {String(guidance.marketValue || '')}
+                                        </ReactMarkdown>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -340,7 +300,9 @@ ${JSON.stringify(guidance.skillGap, null, 2)}
                                 </CardHeader>
                                 <CardContent>
                                     <div className="prose prose-sm dark:prose-invert max-w-none">
-                                        {renderContent(guidance.skillGap)}
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                            {String(guidance.skillGap || '')}
+                                        </ReactMarkdown>
                                     </div>
                                 </CardContent>
                             </Card>

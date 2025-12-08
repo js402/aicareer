@@ -1,3 +1,5 @@
+'use client'
+
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -13,15 +15,32 @@ export function useAuthGuard({ redirectTo = 'analysis', requireCV = false, cvCon
 
     useEffect(() => {
         const checkAuth = async () => {
-            const { data: { session } } = await supabase.auth.getSession()
+            try {
+                const { data: { session } } = await supabase.auth.getSession()
 
-            if (!session) {
-                router.push(`/auth?redirect=${redirectTo}`)
-                return
-            }
+                if (!session) {
+                    router.push(`/auth?redirect=${redirectTo}`)
+                    return
+                }
 
-            if (requireCV && !cvContent) {
-                router.push('/')
+                if (requireCV && !cvContent) {
+                    router.push('/')
+                    return
+                }
+
+                // Optional: Check if user has Pro access for certain pages
+                if (redirectTo.includes('job-match') || redirectTo.includes('career-guidance')) {
+                    const response = await fetch('/api/subscription/status')
+                    const { isPro } = await response.json()
+
+                    if (!isPro) {
+                        router.push('/pricing')
+                        return
+                    }
+                }
+            } catch (error) {
+                console.error('Auth guard error:', error)
+                router.push('/auth')
             }
         }
 

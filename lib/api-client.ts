@@ -1,111 +1,35 @@
-/**
- * Client-side helper function to call the CV analysis API
- */
+import { ContactInfo } from "@/lib/utils"
 
-export interface AnalyzeCVResponse {
-    analysis: string
-    fromCache: boolean
-    cachedAt?: string
-    usage?: {
-        prompt_tokens: number
-        completion_tokens: number
-        total_tokens: number
+export interface ValidateCVResponse {
+    status: 'valid' | 'suspicious' | 'invalid'
+    message: string
+    validation: {
+        contentLength: number
+        lineCount: number
+        wordCount: number
+        hasEmail: boolean
+        hasPhone: boolean
+        hasExperience: boolean
+        hasEducation: boolean
     }
-    model?: string
-    filename?: string
-    status?: 'valid' | 'incomplete' | 'invalid'
-    questions?: string[]
-    message?: string
+    recommendations: string[]
 }
 
-export interface AnalyzeCVError {
-    error: string
-    details?: string
-}
-
-export interface ContactInfo {
-    email?: string
-    phone?: string
-    location?: string
-    linkedin?: string
-    website?: string
-}
-
-export interface ExtractedCVInfo {
-    name: string
-    contactInfo: string | ContactInfo
-    experience: Array<{role: string, company: string, duration: string}>
-    skills: string[]
-    education: Array<{degree: string, institution: string, year: string}>
-}
-
-export interface ExtractCVMetadataResponse {
-    extractedInfo: ExtractedCVInfo
-    status: 'valid' | 'incomplete' | 'invalid' | 'error' | 'cached'
-    questions?: string[]
-    message?: string
+export interface ProcessCVResponse {
+    status: 'auth_required' | 'subscription_required' | 'success' | 'error'
+    nextStep?: string
+    message: string
+    data?: unknown
     error?: string
-    cachedAt?: string
-    extractionStatus?: string
-    confidenceScore?: number
 }
 
-export async function analyzeCV(
-    cvContent: string,
-    customPrompt?: string
-): Promise<AnalyzeCVResponse> {
-    const response = await fetch('/api/analyze-cv', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Ensure cookies are sent
-        body: JSON.stringify({
-            cvContent,
-            prompt: customPrompt,
-        }),
-    })
-
-    if (!response.ok) {
-        try {
-            const errorData = await response.json();
-            const errorMessage = errorData.error || errorData.message || `Request failed with status ${response.status}`;
-            throw new Error(errorMessage);
-        } catch (parseError) {
-            // If we can't parse the error response, use a generic message
-            throw new Error(`Failed to analyze CV (HTTP ${response.status})`);
-        }
-    }
-
-    return response.json()
-}
-
-export async function extractCVMetadata(
-    cvContent: string
-): Promise<ExtractCVMetadataResponse> {
-    const response = await fetch('/api/extract-cv-metadata', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Ensure cookies are sent
-        body: JSON.stringify({
-            cvContent,
-        }),
-    })
-
-    if (!response.ok) {
-        try {
-            const errorData = await response.json();
-            const errorMessage = errorData.error || errorData.message || `Request failed with status ${response.status}`;
-            throw new Error(errorMessage);
-        } catch (parseError) {
-            // If we can't parse the error response, use a generic message
-            throw new Error(`Failed to extract CV metadata (HTTP ${response.status})`);
-        }
-    }
-
-    return response.json()
+// Added types
+export interface ExtractedCVInfo {
+    name?: string
+    contactInfo: string | ContactInfo
+    experience: Array<{ role: string; company: string; duration: string }>
+    education: Array<{ degree: string; institution: string; year: string }>
+    skills: string[]
 }
 
 export interface CVMetadataResponse {
@@ -113,252 +37,175 @@ export interface CVMetadataResponse {
     user_id: string
     cv_hash: string
     extracted_info: ExtractedCVInfo
-    extraction_status: 'completed' | 'partial' | 'failed'
-    confidence_score: number | null
+    extraction_status: 'pending' | 'completed' | 'failed'
+    confidence_score: number
     created_at: string
     updated_at: string
 }
 
-export interface GetCVMetadataResponse {
-    metadata: CVMetadataResponse[]
-    total: number
-    hasMore: boolean
+export interface ExtractMetadataResponse {
+    status: 'valid' | 'invalid' | 'incomplete' | 'cached'
+    message?: string
+    questions?: string[]
+    extractedInfo?: ExtractedCVInfo
+}
+
+export interface AnalyzeCVResponse {
+    status: 'valid' | 'invalid' | 'incomplete'
+    message?: string
+    questions?: string[]
+    analysis?: string
 }
 
 /**
- * Get all CV metadata for the current user
+ * Public CV validation (no authentication required)
  */
-export async function getUserCVMetadata(limit: number = 50): Promise<GetCVMetadataResponse> {
-    const response = await fetch(`/api/cv-metadata?limit=${limit}`, {
-        method: 'GET',
-        credentials: 'include',
+export async function validateCV(cvContent: string): Promise<ValidateCVResponse> {
+    const response = await fetch('/api/validate-cv', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ cvContent }),
     })
 
     if (!response.ok) {
-        try {
-            const errorData = await response.json();
-            const errorMessage = errorData.error || errorData.message || `Request failed with status ${response.status}`;
-            throw new Error(errorMessage);
-        } catch (parseError) {
-            // If we can't parse the error response, use a generic message
-            throw new Error(`Failed to fetch CV metadata (HTTP ${response.status})`);
-        }
+        const errorText = await response.text()
+        throw new Error(`Validation failed: ${errorText}`)
     }
 
     return response.json()
 }
 
 /**
- * Update CV metadata
+ * Check if user is authenticated and has Pro access
  */
-export async function updateCVMetadata(
-    metadataId: string,
-    extractedInfo: ExtractedCVInfo
-): Promise<CVMetadataResponse> {
-    const response = await fetch(`/api/cv-metadata/${metadataId}`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ extractedInfo }),
+export async function checkAuthAndSubscription(): Promise<{
+    authenticated: boolean
+    isPro: boolean
+    user?: { id: string; email: string }
+    message: string
+}> {
+    const response = await fetch('/api/auth/check')
+
+    if (!response.ok) {
+        throw new Error('Failed to check authentication status')
+    }
+
+    return response.json()
+}
+
+// Update the existing processCV function to handle auth better
+export async function processCV(cvContent: string): Promise<ProcessCVResponse> {
+    try {
+        // First check auth
+        const authStatus = await checkAuthAndSubscription()
+
+        if (!authStatus.authenticated) {
+            return {
+                status: 'auth_required',
+                nextStep: 'auth',
+                message: 'Authentication required for full processing'
+            }
+        }
+
+        if (!authStatus.isPro) {
+            return {
+                status: 'subscription_required',
+                nextStep: 'pricing',
+                message: 'Pro subscription required for full processing'
+            }
+        }
+
+        // If authenticated and has Pro, proceed
+        const response = await fetch('/api/process-cv', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ cvContent }),
+        })
+
+        if (!response.ok) {
+            const errorData = await response.json()
+            return {
+                status: 'error',
+                error: errorData.error || 'Failed to process CV',
+                message: errorData.message || 'Processing failed'
+            }
+        }
+
+        return response.json()
+    } catch (error) {
+        return {
+            status: 'error',
+            error: error instanceof Error ? error.message : 'Failed to process CV',
+            message: 'An unexpected error occurred'
+        }
+    }
+}
+
+// Added functions
+export async function extractCVMetadata(cvContent: string): Promise<ExtractMetadataResponse> {
+    const response = await fetch('/api/extract-cv-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cvContent }),
     })
 
     if (!response.ok) {
-        try {
-            const errorData = await response.json();
-            const errorMessage = errorData.error || errorData.message || `Request failed with status ${response.status}`;
-            throw new Error(errorMessage);
-        } catch (parseError) {
-            // If we can't parse the error response, use a generic message
-            throw new Error(`Failed to update CV metadata (HTTP ${response.status})`);
-        }
+        throw new Error('Failed to extract metadata')
     }
 
-    const data = await response.json()
-    return data.metadata
+    return response.json()
 }
 
-/**
- * Delete CV metadata
- */
+export async function analyzeCV(cvContent: string): Promise<AnalyzeCVResponse> {
+    const response = await fetch('/api/analyze-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cvContent }),
+    })
+
+    if (!response.ok) {
+        throw new Error('Failed to analyze CV')
+    }
+
+    return response.json()
+}
+
+export async function getUserCVMetadata(): Promise<{ metadata: CVMetadataResponse[] }> {
+    const response = await fetch('/api/cv-metadata', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+    })
+
+    if (!response.ok) {
+        throw new Error('Failed to fetch CV metadata')
+    }
+
+    return response.json()
+}
+
+export async function updateCVMetadata(metadataId: string, updatedInfo: ExtractedCVInfo): Promise<CVMetadataResponse> {
+    const response = await fetch(`/api/cv-metadata/${metadataId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extracted_info: updatedInfo }),
+    })
+
+    if (!response.ok) {
+        throw new Error('Failed to update CV metadata')
+    }
+
+    return response.json()
+}
+
 export async function deleteCVMetadata(metadataId: string): Promise<void> {
     const response = await fetch(`/api/cv-metadata/${metadataId}`, {
         method: 'DELETE',
-        credentials: 'include',
     })
 
     if (!response.ok) {
-        try {
-            const errorData = await response.json();
-            const errorMessage = errorData.error || errorData.message || `Request failed with status ${response.status}`;
-            throw new Error(errorMessage);
-        } catch (parseError) {
-            // If we can't parse the error response, use a generic message
-            throw new Error(`Failed to delete CV metadata (HTTP ${response.status})`);
-        }
+        throw new Error('Failed to delete CV metadata')
     }
 }
-
-/**
- * CV Blueprint API functions
- */
-export interface CVBlueprintResponse {
-    blueprint: {
-        id: string
-        user_id: string
-        profile_data: any
-        total_cvs_processed: number
-        last_cv_processed_at: string | null
-        blueprint_version: number
-        confidence_score: number
-        data_completeness: number
-        created_at: string
-        updated_at: string
-    }
-    isNew: boolean
-}
-
-export interface BlueprintMergeResponse {
-    success: boolean
-    blueprint: any
-    changes: Array<{
-        type: string
-        description: string
-        impact: number
-    }>
-    mergeSummary: {
-        newSkills: number
-        newExperience: number
-        newEducation: number
-        updatedFields: number
-        confidence: number
-    }
-}
-
-/**
- * Get user's CV blueprint
- */
-export async function getUserCVBlueprint(): Promise<CVBlueprintResponse> {
-    const response = await fetch('/api/cv-blueprint', {
-        method: 'GET',
-        credentials: 'include',
-    })
-
-    if (!response.ok) {
-        try {
-            const errorData = await response.json();
-            const errorMessage = errorData.error || errorData.message || `Request failed with status ${response.status}`;
-            throw new Error(errorMessage);
-        } catch (parseError) {
-            // If we can't parse the error response, use a generic message
-            throw new Error(`Failed to fetch CV blueprint (HTTP ${response.status})`);
-        }
-    }
-
-    return response.json()
-}
-
-/**
- * Process new CV into blueprint
- */
-export async function processCVIntoBlueprint(
-    cvMetadata: ExtractedCVInfo,
-    cvHash?: string
-): Promise<BlueprintMergeResponse> {
-    const response = await fetch('/api/cv-blueprint', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({ cvMetadata, cvHash }),
-    })
-
-    if (!response.ok) {
-        try {
-            const errorData = await response.json();
-            const errorMessage = errorData.error || errorData.message || `Request failed with status ${response.status}`;
-
-            // Check if it's a setup error
-            if (errorData.setupRequired || errorMessage.includes('Database setup') || errorMessage.includes('migrations')) {
-                throw new Error(`Database Setup Required: ${errorMessage}${errorData.help ? ` - ${errorData.help}` : ''}`);
-            }
-
-            throw new Error(errorMessage);
-        } catch (parseError) {
-            // If we can't parse the error response, use a generic message
-            throw new Error(`Failed to process CV into blueprint (HTTP ${response.status})`);
-        }
-    }
-
-    return response.json()
-}
-
-/**
- * Unified CV processing endpoint
- */
-export interface ProcessCVResponse {
-    status: 'processed' | 'error'
-    extractedInfo?: ExtractedCVInfo
-    extractionStatus?: string
-    blueprintUpdated?: boolean
-    nextStep?: 'analysis' | 'auth'
-    message?: string
-    error?: string
-}
-
-export async function processCV(cvContent: string): Promise<ProcessCVResponse> {
-    const response = await fetch('/api/process-cv', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ cvContent }),
-    });
-
-    if (!response.ok) {
-        try {
-            const errorData = await response.json();
-            const errorMessage = errorData.error || errorData.message || `Request failed with status ${response.status}`;
-
-            // Check if it's a setup error
-            if (errorData.setupRequired || errorMessage.includes('Database setup') || errorMessage.includes('migrations')) {
-                throw new Error(`Database Setup Required: ${errorMessage}${errorData.help ? ` - ${errorData.help}` : ''}`);
-            }
-
-            throw new Error(errorMessage);
-        } catch (parseError) {
-            // If we can't parse the error response, use a generic message
-            throw new Error(`Failed to process CV (HTTP ${response.status})`);
-        }
-    }
-
-    return response.json();
-}
-
-/**
- * Example usage:
- *
- * import { analyzeCV, extractCVMetadata, getUserCVMetadata, updateCVMetadata, deleteCVMetadata } from '@/lib/api-client'
- *
- * try {
- *   const result = await analyzeCV(cvContent)
- *   console.log(result.analysis)
- * } catch (error) {
- *   console.error('Analysis failed:', error)
- * }
- *
- * try {
- *   const metadata = await extractCVMetadata(cvContent)
- *   console.log(metadata.extractedInfo)
- * } catch (error) {
- *   console.error('Metadata extraction failed:', error)
- * }
- *
- * try {
- *   const { metadata } = await getUserCVMetadata()
- *   console.log('User has', metadata.length, 'CVs stored')
- * } catch (error) {
- *   console.error('Failed to fetch user metadata:', error)
- * }
- */

@@ -5,33 +5,33 @@ import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, FileText, Download, Eye, Info } from "lucide-react"
+import { ArrowLeft, FileText, Download, Eye, Info, Lock, Sparkles } from "lucide-react"
 import { Navbar } from "@/components/navbar"
-import { supabase } from "@/lib/supabase"
 import { useCVStore } from "@/hooks/useCVStore"
-import { useSubscription } from "@/hooks/useSubscription"
 import { downloadTextFile } from "@/lib/download-helpers"
-import { processCV } from "@/lib/api-client"
-import { hashCV } from "@/lib/cv-cache"
-import { CVMetadataDisplay } from "@/components/cv-metadata-display"
-import { MissingInfoModal } from "@/components/analysis/MissingInfoModal"
-import type { ExtractedCVInfo } from "@/lib/api-client"
+import { BasicMetadataDisplay } from "@/components/cv-metadata/basic-metadata-display"
+import { supabase } from "@/lib/supabase"
 
 export default function CVReviewPage() {
     const router = useRouter()
-    const { content: cvContent, filename, extractedInfo, setExtractedInfo, appendSupplementalInfo, clear: clearCV } = useCVStore()
-    const { hasProAccess } = useSubscription()
+    const { content: cvContent, filename, extractedInfo, clear: clearCV } = useCVStore()
     const [isMounted, setIsMounted] = useState(false)
-    const [isExtractingMetadata, setIsExtractingMetadata] = useState(false)
-    const [metadataError, setMetadataError] = useState<string>('')
-    const [extractionAttempted, setExtractionAttempted] = useState(false)
-    const [missingInfoQuestions, setMissingInfoQuestions] = useState<string[]>([])
-    const [isMissingInfoModalOpen, setIsMissingInfoModalOpen] = useState(false)
-    const [isProcessingSupplementalInfo, setIsProcessingSupplementalInfo] = useState(false)
+    const [user, setUser] = useState<any>(null)
 
     useEffect(() => {
-         
         setIsMounted(true)
+
+        // Check current user
+        supabase.auth.getUser().then(({ data: { user } }) => {
+            setUser(user)
+        })
+
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setUser(session?.user || null)
+        })
+
+        return () => subscription.unsubscribe()
     }, [])
 
     useEffect(() => {
@@ -40,91 +40,8 @@ export default function CVReviewPage() {
         }
     }, [isMounted, cvContent, router])
 
-    // Reset extraction attempt when CV content changes
-    useEffect(() => {
-        if (cvContent) {
-            setExtractionAttempted(false)
-        }
-    }, [cvContent])
-
-    // Process CV through unified API endpoint
-    useEffect(() => {
-        const processCVData = async () => {
-            if (!cvContent || extractedInfo || isExtractingMetadata || extractionAttempted) return
-
-            setIsExtractingMetadata(true)
-            setExtractionAttempted(true)
-            setMetadataError('')
-
-            try {
-                const result = await processCV(cvContent)
-
-                if (result.status === 'processed' && result.extractedInfo) {
-                    setExtractedInfo(result.extractedInfo)
-
-                    if (result.extractionStatus === 'incomplete') {
-                        // Check if we have questions from the metadata extraction
-                        // We need to call the extract API directly to get questions
-                        try {
-                            const metadataResponse = await fetch('/api/extract-cv-metadata', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ cvContent })
-                            })
-                            const metadataResult = await metadataResponse.json()
-
-                            if (metadataResult.status === 'incomplete' && metadataResult.questions) {
-                                setMissingInfoQuestions(metadataResult.questions)
-                                setIsMissingInfoModalOpen(true)
-                            } else {
-                                setMetadataError('CV appears to be incomplete. Some information may be missing, but you can still proceed with analysis.')
-                            }
-                        } catch (err) {
-                            console.error('Error fetching missing info questions:', err)
-                            setMetadataError('CV appears to be incomplete. Some information may be missing, but you can still proceed with analysis.')
-                        }
-                    }
-
-                    console.log('CV processed successfully', {
-                        blueprintUpdated: result.blueprintUpdated,
-                        nextStep: result.nextStep
-                    })
-                } else if (result.status === 'error') {
-                    setMetadataError(result.message || 'Failed to process CV. You can still try analysis.')
-                    // Set empty extracted info to prevent re-attempts
-                    setExtractedInfo({
-                        name: '',
-                        contactInfo: '',
-                        experience: [],
-                        skills: [],
-                        education: []
-                    })
-                }
-            } catch (error) {
-                console.error('Error processing CV:', error)
-                setMetadataError('Failed to process CV. You can still proceed with analysis.')
-                // Set empty extracted info to prevent infinite retries
-                setExtractedInfo({
-                    name: '',
-                    contactInfo: '',
-                    experience: [],
-                    skills: [],
-                    education: []
-                })
-            } finally {
-                setIsExtractingMetadata(false)
-            }
-        }
-
-        if (isMounted && cvContent && !extractedInfo && !extractionAttempted) {
-            processCVData()
-        }
-    }, [cvContent, extractedInfo, isMounted, setExtractedInfo, extractionAttempted])
-
     const handleBack = () => {
-        // Clear store and go back
         clearCV()
-        setExtractionAttempted(false) // Reset extraction attempt flag
         router.push('/')
     }
 
@@ -132,40 +49,19 @@ export default function CVReviewPage() {
         downloadTextFile(cvContent, filename)
     }
 
-    const handleMissingInfoSubmit = async (answers: string[]) => {
-        setIsProcessingSupplementalInfo(true)
-        setIsMissingInfoModalOpen(false)
-
+    const handleContinueToAnalysis = async () => {
         try {
-            // Append supplemental info to CV store
-            appendSupplementalInfo(missingInfoQuestions, answers)
-
-            // Clear extracted info to trigger re-processing with updated CV
-            setExtractedInfo({
-                name: '',
-                contactInfo: '',
-                experience: [],
-                skills: [],
-                education: []
-            })
-            setExtractionAttempted(false)
-            setMetadataError('')
-
-            // The useEffect will automatically re-process the CV with the new content
-        } catch (error) {
-            console.error('Error processing supplemental info:', error)
-            setMetadataError('Failed to process supplemental information.')
-        } finally {
-            setIsProcessingSupplementalInfo(false)
-        }
-    }
-
-    const handleContinue = async () => {
-        try {
+            // Check authentication status
             const response = await fetch('/api/auth/check?redirect=analysis')
             const authStatus = await response.json()
 
-            router.push(authStatus.redirectUrl)
+            if (authStatus.authenticated) {
+                // User is authenticated, proceed to analysis
+                router.push('/analysis')
+            } else {
+                // User needs to sign in
+                router.push(authStatus.redirectUrl)
+            }
         } catch (error) {
             console.error('Auth check failed:', error)
             // Fallback to auth page
@@ -227,12 +123,21 @@ export default function CVReviewPage() {
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent>
-                            <CVMetadataDisplay
-                                extractedInfo={extractedInfo}
-                                isLoading={isExtractingMetadata}
-                                error={metadataError}
-                            />
+                        <CardContent className="space-y-4">
+                            <BasicMetadataDisplay cvContent={cvContent} />
+
+                            {/* Authentication Reminder - Only show if not authenticated */}
+                            {!user && (
+                                <div className="pt-4 border-t">
+                                    <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                                        <Lock className="h-4 w-4" />
+                                        <span className="font-medium">Sign in for full analysis</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Full metadata extraction and AI analysis require authentication
+                                    </p>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -271,47 +176,37 @@ export default function CVReviewPage() {
                     </Card>
                 </div>
 
-                {/* Metadata Status */}
-                {extractedInfo && !metadataError && (
-                    <Card className="mt-6 border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
+                {/* Preview Only Notice - Only show if not authenticated */}
+                {!user && (
+                    <Card className="mt-6 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
                         <CardContent className="pt-4">
-                            <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                            <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
                                 <Info className="h-4 w-4" />
                                 <span className="text-sm font-medium">
-                                    Successfully extracted CV information. Ready for analysis!
+                                    Preview Mode - This is a free preview of your CV
                                 </span>
                             </div>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                Sign in to unlock full analysis, career guidance, and job matching features
+                            </p>
                         </CardContent>
                     </Card>
                 )}
 
                 {/* Actions */}
                 <div className="mt-6 flex gap-4 justify-end">
-                    {hasProAccess && (
-                        <Button variant="outline" onClick={handleBack}>
-                            Upload Different CV
-                        </Button>
-                    )}
+                    <Button variant="outline" onClick={handleBack}>
+                        Upload Different CV
+                    </Button>
                     <Button
                         size="lg"
-                        onClick={handleContinue}
-                        disabled={isExtractingMetadata}
+                        onClick={handleContinueToAnalysis}
+                        className="gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                     >
-                        {isExtractingMetadata ? 'Extracting...' : 'Continue to Analysis'}
+                        <Sparkles className="h-4 w-4" />
+                        Continue to Full Analysis
                     </Button>
                 </div>
-
-                {/* Missing Info Modal */}
-                <MissingInfoModal
-                    isOpen={isMissingInfoModalOpen}
-                    questions={missingInfoQuestions}
-                    onSubmit={handleMissingInfoSubmit}
-                    onCancel={() => {
-                        setIsMissingInfoModalOpen(false)
-                        setMissingInfoQuestions([])
-                    }}
-                    isSubmitting={isProcessingSupplementalInfo}
-                />
             </main>
         </div>
     )

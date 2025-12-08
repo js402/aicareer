@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { withAuth } from '@/lib/api-middleware'
-import { extractCVMetadata, processCVIntoBlueprint } from '@/lib/api-client'
+import { extractCVMetadata } from '@/lib/api-client'
+import { mergeCVIntoBlueprint } from '@/lib/cv-blueprint-merger'
 import { hashCV } from '@/lib/cv-cache'
 
 // POST /api/process-cv - Process CV content through the full workflow
@@ -27,7 +28,7 @@ export const POST = withAuth(async (request, { supabase, user }) => {
         // Process into blueprint only for non-cached results
         if ((result.status === 'valid' || result.status === 'incomplete') && result.extractedInfo) {
             try {
-                await processCVIntoBlueprint(result.extractedInfo, cvHash)
+                await mergeCVIntoBlueprint(supabase, user.id, result.extractedInfo, cvHash)
                 blueprintUpdated = true
             } catch (blueprintError) {
                 console.warn('Failed to process CV into blueprint:', blueprintError)

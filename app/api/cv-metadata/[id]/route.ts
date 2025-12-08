@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { withAuth } from '@/lib/api-middleware'
 import type { ExtractedCVInfo } from '@/lib/api-client'
+import { removeCVFromBlueprint } from '@/lib/cv-blueprint-merger'
 
 // PUT /api/cv-metadata/[id] - Update CV metadata
 export const PUT = withAuth(async (request, { supabase, user }) => {
@@ -74,7 +75,7 @@ export const DELETE = withAuth(async (request, { supabase, user }) => {
         // Validate that the metadata belongs to the user
         const { data: existingMetadata, error: fetchError } = await supabase
             .from('cv_metadata')
-            .select('id, user_id')
+            .select('id, user_id, cv_hash')
             .eq('id', id)
             .single()
 
@@ -104,6 +105,16 @@ export const DELETE = withAuth(async (request, { supabase, user }) => {
                 { error: 'Failed to delete metadata' },
                 { status: 500 }
             )
+        }
+
+        // Remove from blueprint
+        try {
+            if (existingMetadata.cv_hash) {
+                await removeCVFromBlueprint(supabase, user.id, existingMetadata.cv_hash)
+            }
+        } catch (blueprintError) {
+            console.error('Error updating blueprint on delete:', blueprintError)
+            // Don't fail the request since the CV deletion succeeded
         }
 
         return NextResponse.json({ success: true })

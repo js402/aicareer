@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ExtractedCVInfo } from './api-client'
+import { openai, DEFAULT_MODEL } from '@/lib/openai'
 
 interface BlueprintProfile {
     personal: {
@@ -19,12 +20,14 @@ interface BlueprintProfile {
         duration: string
         description?: string
         confidence: number
+        sources: string[] // CV hashes
     }>
     education: Array<{
         degree: string
         institution: string
         year: string
         confidence: number
+        sources: string[] // CV hashes
     }>
     skills: Array<{
         name: string
@@ -50,6 +53,71 @@ interface MergeResult {
 }
 
 /**
+ * Remove a CV's data from the blueprint
+ */
+export async function removeCVFromBlueprint(
+    supabase: SupabaseClient,
+    userId: string,
+    cvHash: string
+): Promise<void> {
+    // Get current blueprint
+    const { data: currentBlueprint, error: fetchError } = await supabase
+        .from('cv_blueprints')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
+
+    if (fetchError || !currentBlueprint) return // Nothing to update
+
+    const profile: BlueprintProfile = currentBlueprint.profile_data
+
+    // Filter out the cvHash from sources and remove items with no sources
+    // Note: For personal/contact info, we don't track sources granularly yet, 
+    // so we leave them as is (or we could clear them if they were the ONLY source, but that's hard to track without source fields)
+
+    // Filter Experience
+    const newExperience = profile.experience.map(item => ({
+        ...item,
+        sources: (item.sources || []).filter(h => h !== cvHash)
+    })).filter(item => item.sources.length > 0)
+
+    // Filter Education
+    const newEducation = profile.education.map(item => ({
+        ...item,
+        sources: (item.sources || []).filter(h => h !== cvHash)
+    })).filter(item => item.sources.length > 0)
+
+    // Filter Skills
+    const newSkills = profile.skills.map(item => ({
+        ...item,
+        sources: (item.sources || []).filter(h => h !== cvHash)
+    })).filter(item => item.sources.length > 0)
+
+    const newProfile = {
+        ...profile,
+        experience: newExperience,
+        education: newEducation,
+        skills: newSkills
+    }
+
+    // Recalculate metrics
+    const confidenceScore = calculateConfidenceScore(newProfile, 0)
+    const dataCompleteness = calculateDataCompleteness(newProfile)
+
+    // Update DB
+    await supabase
+        .from('cv_blueprints')
+        .update({
+            profile_data: newProfile,
+            total_cvs_processed: Math.max(0, (currentBlueprint.total_cvs_processed || 1) - 1),
+            confidence_score: confidenceScore,
+            data_completeness: dataCompleteness,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', currentBlueprint.id)
+}
+
+/**
  * Merge new CV data into the user's blueprint
  */
 export async function mergeCVIntoBlueprint(
@@ -67,7 +135,6 @@ export async function mergeCVIntoBlueprint(
         })
 
         if (blueprintError) {
-            // Check if the error is because the function doesn't exist (not in test environment)
             if (blueprintError.message?.includes('function') &&
                 blueprintError.message?.includes('does not exist') &&
                 process.env.NODE_ENV !== 'test') {
@@ -85,9 +152,8 @@ export async function mergeCVIntoBlueprint(
             throw new Error('Failed to get blueprint ID from RPC call')
         }
     } catch (error) {
-        // If it's a network error or the function doesn't exist, provide setup instructions
         if (error instanceof Error && error.message.includes('does not exist')) {
-            throw error // Re-throw our custom error
+            throw error
         }
         throw new Error(`Database setup required. Please ensure Supabase migrations are applied. Error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
@@ -111,8 +177,8 @@ export async function mergeCVIntoBlueprint(
         skills: []
     }
 
-    // Merge the new CV data
-    const { newProfile, changes, summary } = mergeCVData(currentProfile, cvMetadata, cvHash)
+    // Merge the new CV data using AI
+    const { newProfile, changes, summary } = await mergeCVDataWithAI(currentProfile, cvMetadata, cvHash)
 
     // Calculate new completeness and confidence
     const dataCompleteness = calculateDataCompleteness(newProfile)
@@ -156,146 +222,71 @@ export async function mergeCVIntoBlueprint(
 }
 
 /**
- * Intelligently merge CV data into existing blueprint
+ * Intelligently merge CV data into existing blueprint using OpenAI
  */
-function mergeCVData(existingProfile: BlueprintProfile, newCV: ExtractedCVInfo, cvHash: string): {
+async function mergeCVDataWithAI(
+    existingProfile: BlueprintProfile,
+    newCV: ExtractedCVInfo,
+    cvHash: string
+): Promise<{
     newProfile: BlueprintProfile
-    changes: Array<{type: string, description: string, impact: number}>
+    changes: Array<{ type: string, description: string, impact: number }>
     summary: MergeResult['mergeSummary']
-} {
-    const newProfile: BlueprintProfile = JSON.parse(JSON.stringify(existingProfile))
-    const changes: Array<{type: string, description: string, impact: number}> = []
-    const summary = {
-        newSkills: 0,
-        newExperience: 0,
-        newEducation: 0,
-        updatedFields: 0,
-        confidence: 0
+}> {
+
+    const SYSTEM_PROMPT = `You are an expert Data Harmonizer for professional profiles.
+    Your task is to merge "New CV Data" into an "Existing Blueprint Profile".
+    
+    CRITICAL RULES:
+    1. Base Truth: The Existing Blueprint is the master record. Use it as the foundation.
+    2. Deduplication: You MUST recognize semantic duplicates. 
+       - "Software Engineer" at "Tech Co" (2020-2022) IS THE SAME AS "Software Developer" at "Tech Co" (2020-2022).
+       - "University of Bremen" IS THE SAME AS "Universität Bremen".
+       - MERGE these into a single entry, choosing the most professional/complete description.
+    3. Gap Filling: If the new CV has missing dates or details that the Blueprint already has, KEEP the Blueprint's details.
+    4. New Info: If the new CV has *new* roles or skills not in the Blueprint, ADD them.
+    5. Contact Info: Merge contact info, keeping the union of all unique valid contacts.
+    6. Skills: Merge skills lists. Deduplicate synonyms (e.g. "React" vs "React.js" -> keep "React").
+    7. SOURCE TRACKING: For EVERY item in experience, education, and skills arrays, you MUST maintain a 'sources' array of strings.
+       - If you create a NEW item from the New CV, 'sources' = ["${cvHash}"].
+       - If you merge into an EXISTING item, append "${cvHash}" to its 'sources' if not already present.
+       - If you keep an existing item untouched, KEEP its existing 'sources'.
+
+    Output MUST be a JSON object with this structure:
+    {
+        "newProfile": { ...complete merged profile structure with sources... },
+        "changes": [ { "type": "experience"|"education"|"skill"|"personal", "description": "Merged 'Software Dev' into existing 'Software Engineer' entry", "impact": 0.1 } ],
+        "summary": { "newSkills": count, "newExperience": count, "newEducation": count, "updatedFields": count }
     }
+    `
 
-    // Merge personal information
-    if (newCV.name && (!existingProfile.personal.name || existingProfile.personal.name.length < newCV.name.length)) {
-        newProfile.personal.name = newCV.name
-        changes.push({
-            type: 'personal',
-            description: `Updated name to "${newCV.name}"`,
-            impact: 0.1
-        })
-        summary.updatedFields++
-    }
-
-    // Merge contact information
-    const contactFields = ['email', 'phone', 'location', 'linkedin', 'website'] as const
-    for (const field of contactFields) {
-        const newValue = (newCV.contactInfo as any)?.[field]
-        if (newValue && !existingProfile.contact[field]) {
-            ;(newProfile.contact as any)[field] = newValue
-            changes.push({
-                type: 'contact',
-                description: `Added ${field}: ${newValue}`,
-                impact: 0.05
-            })
-            summary.updatedFields++
-        }
-    }
-
-    // Merge skills with deduplication and confidence tracking
-    for (const skill of newCV.skills) {
-        const existingSkillIndex = newProfile.skills.findIndex(s =>
-            s.name.toLowerCase() === skill.toLowerCase()
-        )
-
-        if (existingSkillIndex === -1) {
-            // New skill
-            newProfile.skills.push({
-                name: skill,
-                confidence: 0.8, // High confidence for new skills
-                sources: cvHash ? [cvHash] : []
-            })
-            changes.push({
-                type: 'skill',
-                description: `Added new skill: ${skill}`,
-                impact: 0.1
-            })
-            summary.newSkills++
-        } else {
-            // Existing skill - increase confidence and add source
-            const existingSkill = newProfile.skills[existingSkillIndex]
-            existingSkill.confidence = Math.min(1.0, existingSkill.confidence + 0.1)
-            if (cvHash && !existingSkill.sources.includes(cvHash)) {
-                existingSkill.sources.push(cvHash)
+    const completion = await openai.chat.completions.create({
+        model: DEFAULT_MODEL,
+        messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            {
+                role: 'user',
+                content: JSON.stringify({
+                    existingProfile,
+                    newCV: { ...newCV, sourceHash: cvHash }
+                })
             }
-        }
+        ],
+        response_format: { type: 'json_object' }
+    });
+
+    const result = JSON.parse(completion.choices[0].message.content || '{}');
+
+    // Fallback if AI fails (should rarely happen with JSON mode)
+    if (!result.newProfile) {
+        throw new Error("AI failed to return a valid merged profile");
     }
 
-    // Merge experience with intelligent deduplication
-    for (const newExp of newCV.experience) {
-        const isDuplicate = newProfile.experience.some(existingExp =>
-            existingExp.role.toLowerCase() === newExp.role.toLowerCase() &&
-            existingExp.company.toLowerCase() === newExp.company.toLowerCase() &&
-            Math.abs(parseDuration(existingExp.duration) - parseDuration(newExp.duration)) < 0.5 // Within 6 months
-        )
-
-        if (!isDuplicate) {
-            newProfile.experience.push({
-                ...newExp,
-                confidence: 0.9 // High confidence for new experience
-            })
-            changes.push({
-                type: 'experience',
-                description: `Added experience: ${newExp.role} at ${newExp.company}`,
-                impact: 0.2
-            })
-            summary.newExperience++
-        }
+    return {
+        newProfile: result.newProfile,
+        changes: result.changes || [],
+        summary: result.summary || { newSkills: 0, newExperience: 0, newEducation: 0, updatedFields: 0, confidence: 0 }
     }
-
-    // Sort experience by recency (rough approximation)
-    newProfile.experience.sort((a, b) => parseDuration(b.duration) - parseDuration(a.duration))
-
-    // Merge education with deduplication
-    for (const newEdu of newCV.education) {
-        const isDuplicate = newProfile.education.some(existingEdu =>
-            existingEdu.degree.toLowerCase() === newEdu.degree.toLowerCase() &&
-            existingEdu.institution.toLowerCase() === newEdu.institution.toLowerCase()
-        )
-
-        if (!isDuplicate) {
-            newProfile.education.push({
-                ...newEdu,
-                confidence: 0.9 // High confidence for new education
-            })
-            changes.push({
-                type: 'education',
-                description: `Added education: ${newEdu.degree} from ${newEdu.institution}`,
-                impact: 0.15
-            })
-            summary.newEducation++
-        }
-    }
-
-    // Sort education by recency
-    newProfile.education.sort((a, b) => parseInt(b.year) - parseInt(a.year))
-
-    // Calculate overall confidence
-    summary.confidence = calculateConfidenceScore(newProfile, summary.newSkills + summary.newExperience + summary.newEducation)
-
-    return { newProfile, changes, summary }
-}
-
-/**
- * Parse duration string to approximate years
- */
-function parseDuration(duration: string): number {
-    // Simple parsing - could be enhanced
-    const years = duration.match(/(\d+)\s*(?:year|yr)/i)
-    const months = duration.match(/(\d+)\s*(?:month|mo)/i)
-
-    let totalYears = 0
-    if (years) totalYears += parseInt(years[1])
-    if (months) totalYears += parseInt(months[1]) / 12
-
-    return totalYears
 }
 
 /**

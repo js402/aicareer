@@ -12,11 +12,11 @@ import { CVViewModal } from "@/components/positions/CVViewModal"
 import { NotesCard } from "@/components/positions/NotesCard"
 import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { MatchScoreCircle } from "@/components/analysis/match-score-circle"
-import { SkillListCard } from "@/components/analysis/skill-list-card"
+
 import { useCVStore } from "@/hooks/useCVStore"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { cleanMarkdown } from "@/lib/markdown"
+
 import { downloadMarkdown } from "@/lib/download-helpers"
 import {
     AlertDialog,
