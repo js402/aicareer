@@ -12,6 +12,7 @@ import { CVViewModal } from "@/components/positions/CVViewModal"
 import { NotesCard } from "@/components/positions/NotesCard"
 import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { MatchScoreCircle } from "@/components/analysis/match-score-circle"
+import { EmailGenerator } from "@/components/positions/EmailGenerator"
 
 import { useCVStore } from "@/hooks/useCVStore"
 import ReactMarkdown from 'react-markdown'
@@ -318,9 +319,10 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
                     {/* Main Content */}
                     <div className="lg:col-span-2">
                         <Tabs defaultValue="analysis" className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 mb-8">
+                            <TabsList className="grid w-full grid-cols-3 mb-8">
                                 <TabsTrigger value="analysis">Match Analysis</TabsTrigger>
                                 <TabsTrigger value="description">Job Description</TabsTrigger>
+                                <TabsTrigger value="email">Application Email</TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="analysis" className="mt-0">
@@ -387,6 +389,15 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
                                         </div>
                                     </CardContent>
                                 </Card>
+                            </TabsContent>
+
+                            <TabsContent value="email" className="mt-0">
+                                <EmailGenerator
+                                    jobDescription={position.job_description}
+                                    cvContent={cvContent}
+                                    companyName={position.company_name}
+                                    positionTitle={position.position_title}
+                                />
                             </TabsContent>
                         </Tabs>
                     </div>

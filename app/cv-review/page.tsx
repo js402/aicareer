@@ -11,15 +11,19 @@ import { useCVStore } from "@/hooks/useCVStore"
 import { downloadTextFile } from "@/lib/download-helpers"
 import { BasicMetadataDisplay } from "@/components/cv-metadata/basic-metadata-display"
 import { supabase } from "@/lib/supabase"
+import type { User } from '@supabase/supabase-js'
 
 export default function CVReviewPage() {
     const router = useRouter()
-    const { content: cvContent, filename, extractedInfo, clear: clearCV } = useCVStore()
-    const [isMounted, setIsMounted] = useState(false)
-    const [user, setUser] = useState<any>(null)
+    const { content: cvContent, filename, clear: clearCV } = useCVStore()
+    const [user, setUser] = useState<User | null>(null)
 
     useEffect(() => {
-        setIsMounted(true)
+        // Check if no CV content, redirect to home
+        if (!cvContent) {
+            router.push('/')
+            return
+        }
 
         // Check current user
         supabase.auth.getUser().then(({ data: { user } }) => {
@@ -32,13 +36,7 @@ export default function CVReviewPage() {
         })
 
         return () => subscription.unsubscribe()
-    }, [])
-
-    useEffect(() => {
-        if (isMounted && !cvContent) {
-            router.push('/')
-        }
-    }, [isMounted, cvContent, router])
+    }, [cvContent, router])
 
     const handleBack = () => {
         clearCV()
@@ -67,17 +65,6 @@ export default function CVReviewPage() {
             // Fallback to auth page
             router.push('/auth?redirect=analysis')
         }
-    }
-
-    if (!isMounted) {
-        return (
-            <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
-                <Navbar />
-                <main className="flex-1 flex items-center justify-center">
-                    <p className="text-muted-foreground">Loading...</p>
-                </main>
-            </div>
-        )
     }
 
     return (

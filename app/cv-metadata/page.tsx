@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,7 +20,17 @@ export default function CVMetadataPage() {
     const router = useRouter()
     const { hasProAccess } = useSubscription()
     const [metadata, setMetadata] = useState<CVMetadataResponse[]>([])
-    const [blueprint, setBlueprint] = useState<any>(null)
+    const [blueprint, setBlueprint] = useState<{
+        profile_data: {
+            personal?: { name?: string; summary?: string }
+            contact?: { email?: string; phone?: string; location?: string; linkedin?: string; website?: string }
+            skills?: Array<{ name: string; confidence?: number }>
+            experience?: Array<{ role: string; company: string; duration: string; description?: string }>
+            education?: Array<{ degree: string; institution: string; year: string }>
+        }
+        confidence_score?: number
+        updated_at: string
+    } | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string>('')
     const [successMessage, setSuccessMessage] = useState<string>('')
@@ -28,28 +38,7 @@ export default function CVMetadataPage() {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
 
-    useEffect(() => {
-        checkAuthAndLoadMetadata()
-    }, [])
-
-    const checkAuthAndLoadMetadata = async () => {
-        try {
-            const { data: { session } } = await supabase.auth.getSession()
-            if (!session) {
-                router.push('/auth?redirect=cv-metadata')
-                return
-            }
-
-            await loadMetadata()
-        } catch (error) {
-            console.error('Auth check failed:', error)
-            setError('Failed to load metadata')
-        } finally {
-            setIsLoading(false)
-        }
-    }
-
-    const loadMetadata = async () => {
+    const loadMetadata = useCallback(async () => {
         try {
             const result = await getUserCVMetadata()
             setMetadata(result.metadata)
@@ -64,7 +53,30 @@ export default function CVMetadataPage() {
             console.error('Failed to load metadata:', error)
             setError('Failed to load CV metadata')
         }
-    }
+    }, [])
+
+    const checkAuthAndLoadMetadata = useCallback(async () => {
+        try {
+            const { data: { session } } = await supabase.auth.getSession()
+            if (!session) {
+                router.push('/auth?redirect=cv-metadata')
+                return
+            }
+
+            await loadMetadata()
+        } catch (error) {
+            console.error('Auth check failed:', error)
+            setError('Failed to load metadata')
+        } finally {
+            setIsLoading(false)
+        }
+    }, [router, loadMetadata])
+
+    useEffect(() => {
+        checkAuthAndLoadMetadata()
+    }, [checkAuthAndLoadMetadata])
+
+
 
     const handleEdit = (item: CVMetadataResponse) => {
         setEditingMetadata(item)

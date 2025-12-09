@@ -1,5 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { NextResponse } from 'next/server'
 import { withProAccess } from '@/lib/api-middleware'
 import crypto from 'crypto'
 

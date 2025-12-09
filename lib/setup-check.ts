@@ -25,7 +25,7 @@ export async function checkDatabaseSetup(): Promise<{
                 if (error) {
                     missing.push(`Table: ${table}`)
                 }
-            } catch (_error) {
+            } catch {
                 missing.push(`Table: ${table}`)
             }
         }
@@ -39,7 +39,7 @@ export async function checkDatabaseSetup(): Promise<{
                 if (error && error.message?.includes('does not exist')) {
                     missing.push(`RPC Function: ${func}`)
                 }
-            } catch (_error) {
+            } catch {
                 missing.push(`RPC Function: ${func}`)
             }
         }

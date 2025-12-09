@@ -1,0 +1,140 @@
+import { useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Textarea } from '@/components/ui/textarea'
+import { Mail, Copy, Check, Loader2, Sparkles } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+
+interface EmailGeneratorProps {
+    jobDescription: string
+    cvContent: string | null
+    companyName: string
+    positionTitle: string
+}
+
+export function EmailGenerator({ jobDescription, cvContent, companyName, positionTitle }: EmailGeneratorProps) {
+    const { toast } = useToast()
+    const [mode, setMode] = useState<'employee' | 'freelancer'>('employee')
+    const [isGenerating, setIsGenerating] = useState(false)
+    const [emailBody, setEmailBody] = useState('')
+    const [isCopied, setIsCopied] = useState(false)
+
+    const handleGenerate = async () => {
+        setIsGenerating(true)
+        try {
+            const response = await fetch('/api/generate-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jobDescription,
+                    cvContent,
+                    mode,
+                    companyName,
+                    positionTitle
+                })
+            })
+
+            if (!response.ok) throw new Error('Failed to generate email')
+
+            const data = await response.json()
+            setEmailBody(data.emailBody)
+        } catch (error) {
+            console.error(error)
+            toast({
+                variant: "destructive",
+                title: "Error",
+                description: "Failed to generate email. Please try again.",
+            })
+        } finally {
+            setIsGenerating(false)
+        }
+    }
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(emailBody)
+        setIsCopied(true)
+        toast({
+            title: "Copied!",
+            description: "Email body copied to clipboard.",
+        })
+        setTimeout(() => setIsCopied(false), 2000)
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Mail className="h-5 w-5 text-blue-600" />
+                    Application Email Generator
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="space-y-3">
+                    <Label>Application Mode</Label>
+                    <RadioGroup
+                        defaultValue="employee"
+                        value={mode}
+                        onValueChange={(v) => setMode(v as 'employee' | 'freelancer')}
+                        className="flex gap-4"
+                    >
+                        <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors flex-1">
+                            <RadioGroupItem value="employee" id="r-employee" />
+                            <Label htmlFor="r-employee" className="cursor-pointer font-medium">Full-time Employee</Label>
+                        </div>
+                        <div className="flex items-center space-x-2 border rounded-lg p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors flex-1">
+                            <RadioGroupItem value="freelancer" id="r-freelancer" />
+                            <Label htmlFor="r-freelancer" className="cursor-pointer font-medium">Freelance Proposal</Label>
+                        </div>
+                    </RadioGroup>
+                </div>
+
+                <Button
+                    onClick={handleGenerate}
+                    disabled={isGenerating}
+                    className="w-full"
+                >
+                    {isGenerating ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Generating...
+                        </>
+                    ) : (
+                        <>
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            Generate Email Draft
+                        </>
+                    )}
+                </Button>
+
+                {emailBody && (
+                    <div className="space-y-2 animate-in fade-in duration-300">
+                        <div className="flex items-center justify-between">
+                            <Label>Generated Draft</Label>
+                            <Button variant="ghost" size="sm" onClick={handleCopy}>
+                                {isCopied ? (
+                                    <>
+                                        <Check className="h-4 w-4 mr-1 text-green-600" />
+                                        <span className="text-green-600">Copied</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="h-4 w-4 mr-1" />
+                                        Copy
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                        <Textarea
+                            value={emailBody}
+                            onChange={(e) => setEmailBody(e.target.value)}
+                            className="min-h-[250px] font-sans text-base leading-relaxed"
+                            placeholder="Your email draft will appear here..."
+                        />
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    )
+}

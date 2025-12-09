@@ -13,12 +13,13 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { supabase } from "@/lib/supabase"
-import { User, LogOut, LogIn, Sparkles, Menu, X, FileText, Settings, CreditCard } from "lucide-react"
+import { User, LogOut, LogIn, Sparkles, Menu, X, FileText, CreditCard } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 export function Navbar() {
     const pathname = usePathname()
-    const [user, setUser] = useState<any>(null)
+    const [user, setUser] = useState<SupabaseUser | null>(null)
     const [loading, setLoading] = useState(true)
     const [isMenuOpen, setIsMenuOpen] = useState(false)
 
