@@ -30,6 +30,10 @@ export interface ExtractedCVInfo {
     experience: Array<{ role: string; company: string; duration: string }>
     education: Array<{ degree: string; institution: string; year: string }>
     skills: string[]
+    projects: Array<{ name: string; description: string; technologies: string[]; link?: string }>
+    certifications: Array<{ name: string; issuer: string; year: string }>
+    languages: string[]
+    summary: string
 }
 
 export interface CVMetadataResponse {

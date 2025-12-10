@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Mail, Copy, Check, Loader2, Sparkles } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -17,6 +18,9 @@ interface EmailGeneratorProps {
 export function EmailGenerator({ jobDescription, cvContent, companyName, positionTitle }: EmailGeneratorProps) {
     const { toast } = useToast()
     const [mode, setMode] = useState<'employee' | 'freelancer'>('employee')
+    const [tone, setTone] = useState<string>('Professional')
+    const [length, setLength] = useState<string>('Standard')
+    const [focus, setFocus] = useState<string>('')
     const [isGenerating, setIsGenerating] = useState(false)
     const [emailBody, setEmailBody] = useState('')
     const [isCopied, setIsCopied] = useState(false)
@@ -32,7 +36,10 @@ export function EmailGenerator({ jobDescription, cvContent, companyName, positio
                     cvContent,
                     mode,
                     companyName,
-                    positionTitle
+                    positionTitle,
+                    tone,
+                    length,
+                    focus
                 })
             })
 
@@ -88,6 +95,47 @@ export function EmailGenerator({ jobDescription, cvContent, companyName, positio
                             <Label htmlFor="r-freelancer" className="cursor-pointer font-medium">Freelance Proposal</Label>
                         </div>
                     </RadioGroup>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label>Tone</Label>
+                        <Select value={tone} onValueChange={setTone}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select tone" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Professional">Professional</SelectItem>
+                                <SelectItem value="Enthusiastic">Enthusiastic</SelectItem>
+                                <SelectItem value="Confident">Confident</SelectItem>
+                                <SelectItem value="Direct">Direct</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Length</Label>
+                        <Select value={length} onValueChange={setLength}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select length" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Short">Short (Concise)</SelectItem>
+                                <SelectItem value="Standard">Standard</SelectItem>
+                                <SelectItem value="Detailed">Detailed</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <Label>Key Focus Details (Optional)</Label>
+                    <Textarea
+                        value={focus}
+                        onChange={(e) => setFocus(e.target.value)}
+                        placeholder="e.g. Highlight my leadership experience and AWS certification..."
+                        className="h-20"
+                    />
                 </div>
 
                 <Button

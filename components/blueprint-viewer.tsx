@@ -5,6 +5,10 @@ import { Badge } from "@/components/ui/badge"
 import { User, Mail, Phone, MapPin, Linkedin, Globe, Award, Briefcase, GraduationCap, Calendar, BarChart3 } from "lucide-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { BlueprintEditForm } from "@/components/blueprint-edit-form"
+import { Edit } from "lucide-react"
 
 interface BlueprintData {
     personal?: {
@@ -41,12 +45,32 @@ interface BlueprintViewerProps {
         confidence_score?: number
         updated_at: string
     } | null
+    onUpdate?: () => void
 }
 
-export function BlueprintViewer({ blueprint }: BlueprintViewerProps) {
+export function BlueprintViewer({ blueprint, onUpdate }: BlueprintViewerProps) {
     const [skillsOpen, setSkillsOpen] = useState(true)
     const [experienceOpen, setExperienceOpen] = useState(true)
     const [educationOpen, setEducationOpen] = useState(true)
+    const [isEditing, setIsEditing] = useState(false)
+
+    const handleSave = async (updatedData: BlueprintData) => {
+        try {
+            const response = await fetch('/api/cv-blueprint', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ profileData: updatedData })
+            })
+
+            if (!response.ok) throw new Error('Failed to update blueprint')
+
+            setIsEditing(false)
+            onUpdate?.()
+        } catch (error) {
+            console.error('Error updating blueprint:', error)
+            throw error // Let the form handle the error state if needed
+        }
+    }
 
     if (!blueprint) {
         return (
@@ -86,11 +110,17 @@ export function BlueprintViewer({ blueprint }: BlueprintViewerProps) {
                             )}
                         </div>
                         {blueprint.confidence_score && (
-                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900/30">
-                                <BarChart3 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">
-                                    {(blueprint.confidence_score * 100).toFixed(0)}% Confidence
-                                </span>
+                            <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900/30">
+                                    <BarChart3 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                    <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">
+                                        {(blueprint.confidence_score * 100).toFixed(0)}% Confidence
+                                    </span>
+                                </div>
+                                <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Edit Blueprint
+                                </Button>
                             </div>
                         )}
                     </div>
@@ -253,6 +283,24 @@ export function BlueprintViewer({ blueprint }: BlueprintViewerProps) {
             <div className="text-xs text-muted-foreground text-center">
                 Last updated: {new Date(blueprint.updated_at).toLocaleString()}
             </div>
+
+            <Dialog open={isEditing} onOpenChange={setIsEditing}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Professional Blueprint</DialogTitle>
+                        <DialogDescription>
+                            Manually update your blueprint data. These changes will overwrite existing information.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {isEditing && (
+                        <BlueprintEditForm
+                            initialData={data}
+                            onSave={handleSave}
+                            onCancel={() => setIsEditing(false)}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

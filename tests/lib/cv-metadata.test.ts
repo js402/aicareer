@@ -7,6 +7,11 @@ import {
     deleteCVMetadata
 } from '@/lib/cv-metadata'
 
+// Mock cv-blueprint-merger to avoid OpenAI dependency
+vi.mock('@/lib/cv-blueprint-merger', () => ({
+    mergeCVIntoBlueprint: vi.fn().mockResolvedValue({})
+}))
+
 const mockSupabase = {
     from: vi.fn()
 }
@@ -66,7 +71,11 @@ describe('CV Metadata Library', () => {
                 contactInfo: 'john@example.com',
                 experience: [{ role: 'Developer', company: 'Acme', duration: '2020-2023' }],
                 skills: ['JavaScript'],
-                education: [{ degree: 'BS', institution: 'University', year: '2020' }]
+                education: [{ degree: 'BS', institution: 'University', year: '2020' }],
+                projects: [],
+                certifications: [],
+                languages: [],
+                summary: ''
             }
 
             const mockResult = {
@@ -107,7 +116,11 @@ describe('CV Metadata Library', () => {
                 contactInfo: 'john@example.com',
                 experience: [],
                 skills: [],
-                education: []
+                education: [],
+                projects: [],
+                certifications: [],
+                languages: [],
+                summary: ''
             }
 
             mockSupabase.from.mockReturnValue({

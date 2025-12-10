@@ -30,8 +30,8 @@ export const createJobPositionSchema = z.object({
   recommendations: z.array(z.string()).optional(),
   experience_alignment: z.any().optional(),
   responsibility_alignment: z.any().optional(),
-  employment_type: z.enum(['full-time', 'part-time', 'contract', 'freelance', 'internship']).optional(),
-  seniority_level: z.enum(['entry', 'junior', 'mid', 'senior', 'lead', 'principal', 'executive']).optional()
+  employment_type: z.enum(['full-time', 'part-time', 'contract', 'freelance', 'internship']).nullable().optional(),
+  seniority_level: z.enum(['entry', 'junior', 'mid', 'senior', 'lead', 'principal', 'executive']).nullable().optional()
 })
 
 export const updateJobPositionSchema = z.object({

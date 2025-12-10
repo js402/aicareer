@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { ArrowLeft, Edit, Trash2, FileText, User, Briefcase, GraduationCap, Award, Calendar, BarChart3, Plus } from "lucide-react"
+import { ArrowLeft, Edit, Trash2, FileText, User, Briefcase, GraduationCap, Award, Calendar, BarChart3, Plus, Sparkles, Loader2 } from "lucide-react"
+import { useCVStore } from "@/hooks/useCVStore"
 import { Navbar } from "@/components/navbar"
 import { supabase } from "@/lib/supabase"
 import { useSubscription } from "@/hooks/useSubscription"
@@ -19,6 +20,7 @@ import type { CVMetadataResponse, ExtractedCVInfo } from "@/lib/api-client"
 export default function CVMetadataPage() {
     const router = useRouter()
     const { hasProAccess } = useSubscription()
+    const { setCV, setAnalysis, setExtractedInfo, clear } = useCVStore()
     const [metadata, setMetadata] = useState<CVMetadataResponse[]>([])
     const [blueprint, setBlueprint] = useState<{
         profile_data: {
@@ -37,6 +39,7 @@ export default function CVMetadataPage() {
     const [editingMetadata, setEditingMetadata] = useState<CVMetadataResponse | null>(null)
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
+    const [loadingAnalysisHash, setLoadingAnalysisHash] = useState<string | null>(null)
 
     const loadMetadata = useCallback(async () => {
         try {
@@ -117,6 +120,41 @@ export default function CVMetadataPage() {
             setSuccessMessage('')
         } finally {
             setIsDeleting(null)
+        }
+    }
+
+    const handleLoadAnalysis = async (item: CVMetadataResponse) => {
+        setLoadingAnalysisHash(item.cv_hash)
+        try {
+            // Fetch stored analysis
+            const response = await fetch(`/api/retrieve-analysis?hash=${item.cv_hash}`)
+
+            if (!response.ok) {
+                if (response.status === 404) {
+                    setError('Analysis content not found. This CV might not have been fully analyzed yet.')
+                } else {
+                    setError('Failed to retrieve analysis.')
+                }
+                return
+            }
+
+            const data = await response.json()
+
+            // Populate store and navigate
+            clear()
+            setCV(data.cvContent, data.filename || 'Stored CV')
+            if (data.analysis) {
+                setAnalysis(data.analysis)
+            }
+            setExtractedInfo(item.extracted_info)
+
+            router.push('/analysis')
+
+        } catch (error) {
+            console.error('Failed to load analysis:', error)
+            setError('An error occurred while loading the analysis.')
+        } finally {
+            setLoadingAnalysisHash(null)
         }
     }
 
@@ -219,7 +257,7 @@ export default function CVMetadataPage() {
                             </p>
                         </div>
                     </div>
-                    <BlueprintViewer blueprint={blueprint} />
+                    <BlueprintViewer blueprint={blueprint} onUpdate={loadMetadata} />
                 </div>
 
                 {/* Individual CV Metadata Section */}
@@ -337,63 +375,82 @@ export default function CVMetadataPage() {
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex gap-2 pt-2">
-                                        <Dialog open={isEditDialogOpen && editingMetadata?.id === item.id} onOpenChange={setIsEditDialogOpen}>
-                                            <DialogTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => handleEdit(item)}
-                                                    className="flex-1"
-                                                >
-                                                    <Edit className="h-4 w-4 mr-2" />
-                                                    Edit
-                                                </Button>
-                                            </DialogTrigger>
-                                            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-                                                <DialogHeader>
-                                                    <DialogTitle>Edit CV Metadata</DialogTitle>
-                                                </DialogHeader>
-                                                {editingMetadata && (
-                                                    <CVMetadataEditForm
-                                                        metadata={editingMetadata}
-                                                        onSave={handleEditSave}
-                                                        onCancel={() => {
-                                                            setIsEditDialogOpen(false)
-                                                            setEditingMetadata(null)
-                                                        }}
-                                                    />
-                                                )}
-                                            </DialogContent>
-                                        </Dialog>
-
-                                        <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                                <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                                                    <Trash2 className="h-4 w-4 mr-2" />
-                                                    Delete
-                                                </Button>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle>Delete CV Metadata</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                        This will permanently delete the metadata for &quot;{item.extracted_info.name || 'this CV'}&quot;.
-                                                        This action cannot be undone.
-                                                    </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                    <AlertDialogAction
-                                                        onClick={() => handleDelete(item.id)}
-                                                        className="bg-red-600 hover:bg-red-700"
-                                                        disabled={isDeleting === item.id}
+                                    <div className="space-y-2 pt-2">
+                                        <Button
+                                            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+                                            onClick={() => handleLoadAnalysis(item)}
+                                            disabled={!!loadingAnalysisHash}
+                                        >
+                                            {loadingAnalysisHash === item.cv_hash ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                    Loading...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Sparkles className="h-4 w-4 mr-2" />
+                                                    View Analysis
+                                                </>
+                                            )}
+                                        </Button>
+                                        <div className="flex gap-2">
+                                            <Dialog open={isEditDialogOpen && editingMetadata?.id === item.id} onOpenChange={setIsEditDialogOpen}>
+                                                <DialogTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleEdit(item)}
+                                                        className="flex-1"
                                                     >
-                                                        {isDeleting === item.id ? 'Deleting...' : 'Delete'}
-                                                    </AlertDialogAction>
-                                                </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                        </AlertDialog>
+                                                        <Edit className="h-4 w-4 mr-2" />
+                                                        Edit
+                                                    </Button>
+                                                </DialogTrigger>
+                                                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                                                    <DialogHeader>
+                                                        <DialogTitle>Edit CV Metadata</DialogTitle>
+                                                    </DialogHeader>
+                                                    {editingMetadata && (
+                                                        <CVMetadataEditForm
+                                                            metadata={editingMetadata}
+                                                            onSave={handleEditSave}
+                                                            onCancel={() => {
+                                                                setIsEditDialogOpen(false)
+                                                                setEditingMetadata(null)
+                                                            }}
+                                                        />
+                                                    )}
+                                                </DialogContent>
+                                            </Dialog>
+
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+                                                        <Trash2 className="h-4 w-4 mr-2" />
+                                                        Delete
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Delete CV Metadata</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            This will permanently delete the metadata for &quot;{item.extracted_info.name || 'this CV'}&quot;.
+                                                            This action cannot be undone.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction
+                                                            onClick={() => handleDelete(item.id)}
+                                                            className="bg-red-600 hover:bg-red-700"
+                                                            disabled={isDeleting === item.id}
+                                                        >
+                                                            {isDeleting === item.id ? 'Deleting...' : 'Delete'}
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>

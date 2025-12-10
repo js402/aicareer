@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Trash2, User, Mail, Phone, MapPin, Briefcase, GraduationCap, Save, X } from "lucide-react"
+import { Plus, Trash2, User, Mail, Phone, MapPin, Briefcase, GraduationCap, Save, X, Award, Globe } from "lucide-react"
 import type { CVMetadataResponse, ExtractedCVInfo } from "@/lib/api-client"
 import { parseContactInfoString, type ContactInfo } from "@/lib/utils"
 
@@ -105,31 +105,75 @@ export function CVMetadataEditForm({ metadata, onSave, onCancel }: CVMetadataEdi
     }
 
     const addExperience = () => {
-        updateField('experience', [...formData.experience, { role: '', company: '', duration: '' }])
+        updateField('experience', [...(formData.experience || []), { role: '', company: '', duration: '' }])
     }
 
     const updateExperience = (index: number, field: keyof Experience, value: string) => {
-        const newExperience = [...formData.experience]
+        const newExperience = [...(formData.experience || [])]
         newExperience[index] = { ...newExperience[index], [field]: value }
         updateField('experience', newExperience)
     }
 
     const removeExperience = (index: number) => {
-        updateField('experience', formData.experience.filter((_, i) => i !== index))
+        updateField('experience', (formData.experience || []).filter((_, i) => i !== index))
     }
 
     const addEducation = () => {
-        updateField('education', [...formData.education, { degree: '', institution: '', year: '' }])
+        updateField('education', [...(formData.education || []), { degree: '', institution: '', year: '' }])
     }
 
     const updateEducation = (index: number, field: keyof Education, value: string) => {
-        const newEducation = [...formData.education]
+        const newEducation = [...(formData.education || [])]
         newEducation[index] = { ...newEducation[index], [field]: value }
         updateField('education', newEducation)
     }
 
     const removeEducation = (index: number) => {
-        updateField('education', formData.education.filter((_, i) => i !== index))
+        updateField('education', (formData.education || []).filter((_, i) => i !== index))
+    }
+
+    const addProject = () => {
+        updateField('projects', [...(formData.projects || []), { name: '', description: '', technologies: [] }])
+    }
+
+    const updateProject = (index: number, field: string, value: any) => {
+        const newProjects = [...(formData.projects || [])]
+        // @ts-ignore
+        newProjects[index] = { ...newProjects[index], [field]: value }
+        updateField('projects', newProjects)
+    }
+
+    const removeProject = (index: number) => {
+        updateField('projects', (formData.projects || []).filter((_, i) => i !== index))
+    }
+
+    const addCertification = () => {
+        updateField('certifications', [...(formData.certifications || []), { name: '', issuer: '', year: '' }])
+    }
+
+    const updateCertification = (index: number, field: string, value: string) => {
+        const newCerts = [...(formData.certifications || [])]
+        // @ts-ignore
+        newCerts[index] = { ...newCerts[index], [field]: value }
+        updateField('certifications', newCerts)
+    }
+
+    const removeCertification = (index: number) => {
+        updateField('certifications', (formData.certifications || []).filter((_, i) => i !== index))
+    }
+
+    const addLanguage = () => {
+        updateField('languages', [...(formData.languages || []), ''])
+    }
+
+    const updateLanguage = (index: number, value: string) => {
+        const newLangs = [...(formData.languages || [])]
+        newLangs[index] = value
+        updateField('languages', newLangs)
+    }
+
+    const removeLanguage = (index: number) => {
+        updateField('languages', (formData.languages || []).filter((_, i) => i !== index))
     }
 
     return (
@@ -154,7 +198,7 @@ export function CVMetadataEditForm({ metadata, onSave, onCancel }: CVMetadataEdi
 
             {/* Tabbed Form */}
             <Tabs defaultValue="personal" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-7">
                     <TabsTrigger value="personal" className="flex items-center gap-2">
                         <User className="h-4 w-4" />
                         Personal
@@ -165,11 +209,23 @@ export function CVMetadataEditForm({ metadata, onSave, onCancel }: CVMetadataEdi
                     </TabsTrigger>
                     <TabsTrigger value="experience" className="flex items-center gap-2">
                         <Briefcase className="h-4 w-4" />
-                        Experience
+                        Exp.
                     </TabsTrigger>
                     <TabsTrigger value="education" className="flex items-center gap-2">
                         <GraduationCap className="h-4 w-4" />
-                        Education
+                        Edu.
+                    </TabsTrigger>
+                    <TabsTrigger value="projects" className="flex items-center gap-2">
+                        <Briefcase className="h-4 w-4" />
+                        Projects
+                    </TabsTrigger>
+                    <TabsTrigger value="certs" className="flex items-center gap-2">
+                        <Award className="h-4 w-4" />
+                        Certs
+                    </TabsTrigger>
+                    <TabsTrigger value="languages" className="flex items-center gap-2">
+                        <Globe className="h-4 w-4" />
+                        Langs
                     </TabsTrigger>
                 </TabsList>
 
@@ -191,6 +247,16 @@ export function CVMetadataEditForm({ metadata, onSave, onCancel }: CVMetadataEdi
                                     onChange={(e) => updateField('name', e.target.value)}
                                     placeholder="Enter your full name"
                                     className="text-lg"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="summary">Professional Summary</Label>
+                                <Input
+                                    id="summary"
+                                    value={formData.summary || ''}
+                                    onChange={(e) => updateField('summary', e.target.value)}
+                                    placeholder="Brief professional summary"
                                 />
                             </div>
 
@@ -446,6 +512,194 @@ export function CVMetadataEditForm({ metadata, onSave, onCancel }: CVMetadataEdi
                                                 </div>
                                             </CardContent>
                                         </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Projects Tab */}
+                <TabsContent value="projects" className="space-y-6 mt-6">
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    <Briefcase className="h-5 w-5" />
+                                    Projects ({formData.projects?.length || 0})
+                                </CardTitle>
+                                <Button variant="outline" size="sm" onClick={addProject}>
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Add Project
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {(!formData.projects || formData.projects.length === 0) ? (
+                                <p className="text-muted-foreground text-center py-8">
+                                    No projects added yet. Click &quot;Add Project&quot; to get started.
+                                </p>
+                            ) : (
+                                <div className="space-y-6">
+                                    {formData.projects.map((proj, index) => (
+                                        <Card key={index} className="border-l-4 border-l-purple-500">
+                                            <CardContent className="pt-6">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                    <div className="space-y-2">
+                                                        <Label>Project Name</Label>
+                                                        <Input
+                                                            value={proj.name}
+                                                            onChange={(e) => updateProject(index, 'name', e.target.value)}
+                                                            placeholder="Project Title"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Link (Optional)</Label>
+                                                        <Input
+                                                            value={proj.link || ''}
+                                                            onChange={(e) => updateProject(index, 'link', e.target.value)}
+                                                            placeholder="https://..."
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Description</Label>
+                                                    <Input
+                                                        value={proj.description}
+                                                        onChange={(e) => updateProject(index, 'description', e.target.value)}
+                                                        placeholder="Brief description of project..."
+                                                    />
+                                                </div>
+                                                <div className="flex justify-end mt-4">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => removeProject(index)}
+                                                        className="text-red-600 hover:text-red-700"
+                                                    >
+                                                        <Trash2 className="h-4 w-4 mr-2" />
+                                                        Remove
+                                                    </Button>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Certifications Tab */}
+                <TabsContent value="certs" className="space-y-6 mt-6">
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    <Award className="h-5 w-5" />
+                                    Certifications ({formData.certifications?.length || 0})
+                                </CardTitle>
+                                <Button variant="outline" size="sm" onClick={addCertification}>
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Add Certification
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {(!formData.certifications || formData.certifications.length === 0) ? (
+                                <p className="text-muted-foreground text-center py-8">
+                                    No certifications added yet. Click &quot;Add Certification&quot; to get started.
+                                </p>
+                            ) : (
+                                <div className="space-y-6">
+                                    {formData.certifications.map((cert, index) => (
+                                        <Card key={index} className="border-l-4 border-l-amber-500">
+                                            <CardContent className="pt-6">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label>Certification Name</Label>
+                                                        <Input
+                                                            value={cert.name}
+                                                            onChange={(e) => updateCertification(index, 'name', e.target.value)}
+                                                            placeholder="AWS Certified..."
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Issuer</Label>
+                                                        <Input
+                                                            value={cert.issuer}
+                                                            onChange={(e) => updateCertification(index, 'issuer', e.target.value)}
+                                                            placeholder="Amazon, Google, etc."
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Year</Label>
+                                                        <Input
+                                                            value={cert.year}
+                                                            onChange={(e) => updateCertification(index, 'year', e.target.value)}
+                                                            placeholder="2023"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-end mt-4">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => removeCertification(index)}
+                                                        className="text-red-600 hover:text-red-700"
+                                                    >
+                                                        <Trash2 className="h-4 w-4 mr-2" />
+                                                        Remove
+                                                    </Button>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Languages Tab */}
+                <TabsContent value="languages" className="space-y-6 mt-6">
+                    <Card>
+                        <CardHeader>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2">
+                                    <Globe className="h-5 w-5" />
+                                    Languages ({formData.languages?.length || 0})
+                                </CardTitle>
+                                <Button variant="outline" size="sm" onClick={addLanguage}>
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Add Language
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {(!formData.languages || formData.languages.length === 0) ? (
+                                <p className="text-muted-foreground text-center py-4">
+                                    No languages added yet.
+                                </p>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {formData.languages.map((lang, index) => (
+                                        <div key={index} className="flex items-center gap-2">
+                                            <Input
+                                                value={lang}
+                                                onChange={(e) => updateLanguage(index, e.target.value)}
+                                                placeholder="Language (e.g. English, German)"
+                                                className="flex-1"
+                                            />
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => removeLanguage(index)}
+                                                className="text-red-600 hover:text-red-700"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                     ))}
                                 </div>
                             )}

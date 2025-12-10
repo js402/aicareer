@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { withAuth } from '@/lib/api-middleware'
-import { mergeCVIntoBlueprint } from '@/lib/cv-blueprint-merger'
+import { mergeCVIntoBlueprint, calculateConfidenceScore, calculateDataCompleteness, type BlueprintProfile } from '@/lib/cv-blueprint-merger'
 
 // GET /api/cv-blueprint - Get user's CV blueprint
 export const GET = withAuth(async (request, { supabase, user }) => {
@@ -126,6 +126,50 @@ export const POST = withAuth(async (request, { supabase, user }) => {
                 help: isSetupError ? 'Run: supabase db push' : undefined
             },
             { status: isSetupError ? 503 : 500 } // 503 Service Unavailable for setup issues
+        )
+    }
+})
+
+// PUT /api/cv-blueprint - Manually update blueprint data
+export const PUT = withAuth(async (request, { supabase, user }) => {
+    try {
+        const { profileData } = await request.json()
+
+        if (!profileData) {
+            return NextResponse.json(
+                { error: 'Profile data is required' },
+                { status: 400 }
+            )
+        }
+
+        // Calculate new metrics
+        const dataCompleteness = calculateDataCompleteness(profileData as BlueprintProfile)
+        const confidenceScore = calculateConfidenceScore(profileData as BlueprintProfile, 0)
+
+        // Update database
+        const { data: updatedBlueprint, error } = await supabase
+            .from('cv_blueprints')
+            .update({
+                profile_data: profileData,
+                confidence_score: confidenceScore,
+                data_completeness: dataCompleteness,
+                updated_at: new Date().toISOString()
+            })
+            .eq('user_id', user.id)
+            .select()
+            .single()
+
+        if (error) throw error
+
+        return NextResponse.json({
+            blueprint: updatedBlueprint,
+            success: true
+        })
+    } catch (error) {
+        console.error('Error updating CV blueprint:', error)
+        return NextResponse.json(
+            { error: 'Failed to update blueprint' },
+            { status: 500 }
         )
     }
 })

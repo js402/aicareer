@@ -2,10 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ExtractedCVInfo } from './api-client'
 import { openai, DEFAULT_MODEL } from '@/lib/openai'
 
-interface BlueprintProfile {
+export interface BlueprintProfile {
     personal: {
         name?: string
         summary?: string
+        languages?: Array<{ name: string; sources: string[] }>
     }
     contact: {
         email?: string
@@ -34,6 +35,21 @@ interface BlueprintProfile {
         confidence: number
         sources: string[] // CV hashes where this skill was found
     }>
+    projects: Array<{
+        name: string
+        description: string
+        technologies: string[]
+        link?: string
+        confidence: number
+        sources: string[]
+    }>
+    certifications: Array<{
+        name: string
+        issuer: string
+        year: string
+        confidence: number
+        sources: string[]
+    }>
 }
 
 interface MergeResult {
@@ -47,6 +63,8 @@ interface MergeResult {
         newSkills: number
         newExperience: number
         newEducation: number
+        newProjects: number
+        newCertifications: number
         updatedFields: number
         confidence: number
     }
@@ -72,32 +90,55 @@ export async function removeCVFromBlueprint(
     const profile: BlueprintProfile = currentBlueprint.profile_data
 
     // Filter out the cvHash from sources and remove items with no sources
-    // Note: For personal/contact info, we don't track sources granularly yet, 
-    // so we leave them as is (or we could clear them if they were the ONLY source, but that's hard to track without source fields)
 
     // Filter Experience
-    const newExperience = profile.experience.map(item => ({
+    const newExperience = (profile.experience || []).map(item => ({
         ...item,
         sources: (item.sources || []).filter(h => h !== cvHash)
     })).filter(item => item.sources.length > 0)
 
     // Filter Education
-    const newEducation = profile.education.map(item => ({
+    const newEducation = (profile.education || []).map(item => ({
         ...item,
         sources: (item.sources || []).filter(h => h !== cvHash)
     })).filter(item => item.sources.length > 0)
 
     // Filter Skills
-    const newSkills = profile.skills.map(item => ({
+    const newSkills = (profile.skills || []).map(item => ({
         ...item,
         sources: (item.sources || []).filter(h => h !== cvHash)
     })).filter(item => item.sources.length > 0)
+
+    // Filter Projects
+    const newProjects = (profile.projects || []).map(item => ({
+        ...item,
+        sources: (item.sources || []).filter(h => h !== cvHash)
+    })).filter(item => item.sources.length > 0)
+
+    // Filter Certifications
+    const newCertifications = (profile.certifications || []).map(item => ({
+        ...item,
+        sources: (item.sources || []).filter(h => h !== cvHash)
+    })).filter(item => item.sources.length > 0)
+
+    // Filter Languages (in personal)
+    const newLanguages = (profile.personal.languages || []).map(item => ({
+        ...item,
+        sources: (item.sources || []).filter(h => h !== cvHash)
+    })).filter(item => item.sources.length > 0)
+
 
     const newProfile = {
         ...profile,
         experience: newExperience,
         education: newEducation,
-        skills: newSkills
+        skills: newSkills,
+        projects: newProjects,
+        certifications: newCertifications,
+        personal: {
+            ...profile.personal,
+            languages: newLanguages
+        }
     }
 
     // Recalculate metrics
@@ -174,7 +215,9 @@ export async function mergeCVIntoBlueprint(
         contact: {},
         experience: [],
         education: [],
-        skills: []
+        skills: [],
+        projects: [],
+        certifications: []
     }
 
     // Merge the new CV data using AI
@@ -244,10 +287,11 @@ async function mergeCVDataWithAI(
        - "University of Bremen" IS THE SAME AS "Universität Bremen".
        - MERGE these into a single entry, choosing the most professional/complete description.
     3. Gap Filling: If the new CV has missing dates or details that the Blueprint already has, KEEP the Blueprint's details.
-    4. New Info: If the new CV has *new* roles or skills not in the Blueprint, ADD them.
+       - If the New CV has a professional Summary/Bio, decide if it's better than existing. If better, update it.
+    4. New Info: If the new CV has *new* roles, skills, projects, certifications, or languages not in the Blueprint, ADD them.
     5. Contact Info: Merge contact info, keeping the union of all unique valid contacts.
     6. Skills: Merge skills lists. Deduplicate synonyms (e.g. "React" vs "React.js" -> keep "React").
-    7. SOURCE TRACKING: For EVERY item in experience, education, and skills arrays, you MUST maintain a 'sources' array of strings.
+    7. SOURCE TRACKING: For EVERY item in experience, education, skills, projects, certifications arrays, and languages (in personal), you MUST maintain a 'sources' array of strings.
        - If you create a NEW item from the New CV, 'sources' = ["${cvHash}"].
        - If you merge into an EXISTING item, append "${cvHash}" to its 'sources' if not already present.
        - If you keep an existing item untouched, KEEP its existing 'sources'.
@@ -255,8 +299,8 @@ async function mergeCVDataWithAI(
     Output MUST be a JSON object with this structure:
     {
         "newProfile": { ...complete merged profile structure with sources... },
-        "changes": [ { "type": "experience"|"education"|"skill"|"personal", "description": "Merged 'Software Dev' into existing 'Software Engineer' entry", "impact": 0.1 } ],
-        "summary": { "newSkills": count, "newExperience": count, "newEducation": count, "updatedFields": count }
+        "changes": [ { "type": "experience"|"education"|"skill"|"project"|"certification"|"personal", "description": "Merged 'Software Dev' into ...", "impact": 0.1 } ],
+        "summary": { "newSkills": count, "newExperience": count, "newEducation": count, "newProjects": count, "newCertifications": count, "updatedFields": count }
     }
     `
 
@@ -285,37 +329,48 @@ async function mergeCVDataWithAI(
     return {
         newProfile: result.newProfile,
         changes: result.changes || [],
-        summary: result.summary || { newSkills: 0, newExperience: 0, newEducation: 0, updatedFields: 0, confidence: 0 }
+        summary: result.summary || { newSkills: 0, newExperience: 0, newEducation: 0, newProjects: 0, newCertifications: 0, updatedFields: 0, confidence: 0 }
     }
 }
 
 /**
  * Calculate data completeness score
  */
-function calculateDataCompleteness(profile: BlueprintProfile): number {
+export function calculateDataCompleteness(profile: BlueprintProfile): number {
     let score = 0
     let total = 0
 
-    // Personal info (20%)
-    total += 0.2
-    if (profile.personal.name) score += 0.2
+    // Personal info (15%)
+    total += 0.15
+    if (profile.personal.name) score += 0.1
+    if (profile.personal.summary) score += 0.05
 
-    // Contact info (20%)
-    total += 0.2
+    // Contact info (15%)
+    total += 0.15
     const contactFields = Object.values(profile.contact).filter(Boolean).length
-    score += (contactFields / 5) * 0.2
+    score += (contactFields / 5) * 0.15
 
-    // Skills (20%)
-    total += 0.2
-    if (profile.skills.length > 0) score += 0.2
+    // Skills (15%)
+    total += 0.15
+    if (profile.skills.length > 0) score += 0.15
 
-    // Experience (30%)
-    total += 0.3
-    if (profile.experience.length > 0) score += 0.3
+    // Experience (25%)
+    total += 0.25
+    if (profile.experience.length > 0) score += 0.25
 
     // Education (10%)
     total += 0.1
     if (profile.education.length > 0) score += 0.1
+
+    // Projects (10%)
+    total += 0.1
+    // @ts-ignore
+    if (profile.projects && profile.projects.length > 0) score += 0.1
+
+    // Certifications (10%)
+    total += 0.1
+    // @ts-ignore
+    if (profile.certifications && profile.certifications.length > 0) score += 0.1
 
     return score / total
 }
@@ -323,7 +378,7 @@ function calculateDataCompleteness(profile: BlueprintProfile): number {
 /**
  * Calculate confidence score based on data quality and quantity
  */
-function calculateConfidenceScore(profile: BlueprintProfile, newItems: number): number {
+export function calculateConfidenceScore(profile: BlueprintProfile, newItems: number): number {
     const baseConfidence = calculateDataCompleteness(profile)
     const learningBonus = Math.min(0.2, newItems * 0.02) // Bonus for recent learning
     const experienceBonus = Math.min(0.1, profile.experience.length * 0.02) // Bonus for extensive experience

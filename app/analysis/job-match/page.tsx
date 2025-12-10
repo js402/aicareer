@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sparkles, Loader2, FileText, ArrowLeft, Building2, MapPin, DollarSign, CheckCircle2 } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { useCVStore } from "@/hooks/useCVStore"
@@ -47,6 +48,7 @@ export default function JobMatchPage() {
     const [isMatching, setIsMatching] = useState(false)
     const [matchError, setMatchError] = useState('')
     const [isSaving, setIsSaving] = useState(false)
+    const [trackError, setTrackError] = useState('')
 
     // Local state for editing metadata before saving
     const [editedMetadata, setEditedMetadata] = useState({
@@ -95,6 +97,7 @@ export default function JobMatchPage() {
     const handleTrackApplication = async () => {
         if (!matchResult) return
         setIsSaving(true)
+        setTrackError('')
 
         try {
             const response = await fetch('/api/job-positions', {
@@ -112,17 +115,21 @@ export default function JobMatchPage() {
                     recommendations: matchResult.recommendations,
                     experience_alignment: matchResult.experienceAlignment,
                     responsibility_alignment: matchResult.responsibilityAlignment,
-                    employment_type: editedMetadata.employment_type,
-                    seniority_level: editedMetadata.seniority_level
+                    employment_type: editedMetadata.employment_type || null,
+                    seniority_level: editedMetadata.seniority_level || null
                 })
             })
 
             if (response.ok) {
                 const newPosition = await response.json()
                 router.push(`/positions/${newPosition.id}`)
+            } else {
+                const data = await response.json()
+                throw new Error(data.error || 'Failed to save position')
             }
         } catch (error) {
             console.error('Error saving position:', error)
+            setTrackError(error instanceof Error ? error.message : 'Failed to save position')
         } finally {
             setIsSaving(false)
         }
@@ -268,25 +275,51 @@ export default function JobMatchPage() {
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="space-y-2">
                                                         <label className="text-xs font-medium text-muted-foreground">Employment Type</label>
-                                                        <Input
+                                                        <Select
                                                             value={editedMetadata.employment_type}
-                                                            onChange={(e) => setEditedMetadata({ ...editedMetadata, employment_type: e.target.value })}
-                                                            className="bg-white dark:bg-slate-900"
-                                                            placeholder="e.g. Full-time"
-                                                        />
+                                                            onValueChange={(value) => setEditedMetadata({ ...editedMetadata, employment_type: value })}
+                                                        >
+                                                            <SelectTrigger className="bg-white dark:bg-slate-900">
+                                                                <SelectValue placeholder="Select type" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="full-time">Full-time</SelectItem>
+                                                                <SelectItem value="part-time">Part-time</SelectItem>
+                                                                <SelectItem value="contract">Contract</SelectItem>
+                                                                <SelectItem value="freelance">Freelance</SelectItem>
+                                                                <SelectItem value="internship">Internship</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
                                                     </div>
                                                     <div className="space-y-2">
                                                         <label className="text-xs font-medium text-muted-foreground">Seniority Level</label>
-                                                        <Input
+                                                        <Select
                                                             value={editedMetadata.seniority_level}
-                                                            onChange={(e) => setEditedMetadata({ ...editedMetadata, seniority_level: e.target.value })}
-                                                            className="bg-white dark:bg-slate-900"
-                                                            placeholder="e.g. Senior"
-                                                        />
+                                                            onValueChange={(value) => setEditedMetadata({ ...editedMetadata, seniority_level: value })}
+                                                        >
+                                                            <SelectTrigger className="bg-white dark:bg-slate-900">
+                                                                <SelectValue placeholder="Select level" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="entry">Entry</SelectItem>
+                                                                <SelectItem value="junior">Junior</SelectItem>
+                                                                <SelectItem value="mid">Mid</SelectItem>
+                                                                <SelectItem value="senior">Senior</SelectItem>
+                                                                <SelectItem value="lead">Lead</SelectItem>
+                                                                <SelectItem value="principal">Principal</SelectItem>
+                                                                <SelectItem value="executive">Executive</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {trackError && (
+                                            <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 rounded-lg">
+                                                <p className="text-sm text-red-600 dark:text-red-400">{trackError}</p>
+                                            </div>
+                                        )}
 
                                         <div className="flex flex-col sm:flex-row gap-4 mt-8 w-full max-w-lg">
                                             <Button

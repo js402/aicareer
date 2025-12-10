@@ -8,9 +8,13 @@ export interface ValidationResult {
     extractedInfo?: {
         name: string
         contactInfo: string
+        summary: string
         experience: Array<{ role: string, company: string, duration: string }>
         skills: string[]
         education: Array<{ degree: string, institution: string, year: string }>
+        projects: Array<{ name: string, description: string, technologies: string[], link?: string }>
+        certifications: Array<{ name: string, issuer: string, year: string }>
+        languages: string[]
     }
     issues?: string[]
 }
@@ -29,9 +33,13 @@ Return a JSON object with:
   "extractedInfo": {
     "name": string,
     "contactInfo": string,
+    "summary": string, // Professional summary or objective
     "experience": Array<{role: string, company: string, duration: string}>,
     "skills": string[],
-    "education": Array<{degree: string, institution: string, year: string}>
+    "education": Array<{degree: string, institution: string, year: string}>,
+    "projects": Array<{name: string, description: string, technologies: string[], link?: string}>,
+    "certifications": Array<{name: string, issuer: string, year: string}>,
+    "languages": string[]
   }
 }
 
