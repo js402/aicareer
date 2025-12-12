@@ -9,7 +9,7 @@ import { Navbar } from "@/components/navbar"
 import { supabase } from "@/lib/supabase"
 import { useCVStore } from "@/hooks/useCVStore"
 import { useSubscription } from "@/hooks/useSubscription"
-import { 
+import {
     ArrowLeft, Sparkles, Download, Edit, AlertCircle,
     Briefcase, Loader2, User, GraduationCap,
     Award, Globe, FolderOpen
@@ -42,7 +42,8 @@ export default function AnalysisPage() {
     // Check if we can generate analysis (have either raw content or extracted info)
     const canGenerateAnalysis = useMemo(() => {
         // We can analyze if we have extracted info (preferred) or raw CV content
-        return !!extractedInfo || (cvContent && !cvContent.match(/^\[CV content for .+\]$/))
+        // We can analyze if we have extracted info (preferred) or just metadata ID (implies valid CV)
+        return !!extractedInfo || !!metadataId
     }, [cvContent, extractedInfo])
 
     // Check authentication and load data
@@ -56,7 +57,14 @@ export default function AnalysisPage() {
                 return
             }
 
-            if (!cvContent) {
+            if (!metadataId) {
+                // Determine if we should redirect to onboarding or home
+                // For now, if no ID and no content, go home. 
+                // If content exists but no ID, they skipped onboarding? -> Redirect to onboarding
+                if (cvContent) {
+                    router.push('/onboarding')
+                    return
+                }
                 router.push('/')
                 return
             }
@@ -86,23 +94,55 @@ export default function AnalysisPage() {
         }
     }, [isMounted, cvContent, extractedInfo, hasProAccess, cvOperations])
 
-    // Auto-open editor if CV is incomplete (after extraction completes)
+    // Rehydrate from DB if we have ID but no data (e.g. fresh login/reload)
     useEffect(() => {
-        if (cvValidation && !cvValidation.isComplete && !hasAutoOpenedEditor && !cvOperations.isLoading) {
+        if (isMounted && metadataId && !extractedInfo && !cvOperations.isLoading) {
+            // We use a specific fetcher or the existing extract-metadata (which handles cache)
+            // But simpler might be to use retrieve-analysis logic or just wait for user to click
+            // Actually, we want to auto-load.
+            // Let's use `checkAuthAndLoad` to trigger a fetch if needed, 
+            // but `useCVOperations` has `loadAnalysisFromMetadata` which takes a hash.
+            // We have the ID, not the hash. 
+            // Ideally we should have a `getCV(id)` method. 
+            // For now, let's assume the component will handle missing data by asking to "Edit Profile" 
+            // or similar, OR we should implement a fetch by ID. 
+            // Given the current hooks, `retrieve-analysis` is by hash.
+            // Let's use the `cv-metadata` API to fetch by ID.
+            const fetchCV = async () => {
+                try {
+                    const res = await fetch(`/api/cv-metadata/${metadataId}`)
+                    if (res.ok) {
+                        const data = await res.json()
+                        // Update store without clearing ID
+                        updateExtractedInfo(data.extracted_info)
+                        // If we stored content in DB, we could fetch it too if we wanted to display "Raw CV"
+                        // But the requirement is "use selected CV from DB".
+                    }
+                } catch (e) {
+                    console.error("Failed to rehydrate CV", e)
+                }
+            }
+            fetchCV()
+        }
+    }, [isMounted, metadataId, extractedInfo, cvOperations.isLoading, updateExtractedInfo])
+
+    // Auto-open editor only if validation fails AND we have data
+    useEffect(() => {
+        if (cvValidation && !cvValidation.isComplete && !hasAutoOpenedEditor && !cvOperations.isLoading && extractedInfo) {
             setIsEditorOpen(true)
             setHasAutoOpenedEditor(true)
         }
-    }, [cvValidation, hasAutoOpenedEditor, cvOperations.isLoading])
+    }, [cvValidation, hasAutoOpenedEditor, cvOperations.isLoading, extractedInfo])
 
     const handleAnalyze = async () => {
         if (!canGenerateAnalysis) {
             setGenerateError('No CV data available. Please upload a CV first.')
             return
         }
-        
+
         setIsAnalyzing(true)
         setGenerateError(null)
-        
+
         try {
             // Pass both cvContent and extractedInfo - API will use what's available
             const result = await cvOperations.analyzeCV(cvContent || undefined, extractedInfo || undefined)
@@ -127,7 +167,7 @@ export default function AnalysisPage() {
     const handleSaveCVEdits = async (updatedInfo: typeof extractedInfo) => {
         if (!updatedInfo) return
         updateExtractedInfo(updatedInfo)
-        
+
         if (metadataId) {
             try {
                 const response = await fetch(`/api/cv-metadata/${metadataId}`, {
@@ -229,7 +269,7 @@ export default function AnalysisPage() {
                                 <div className="inline-flex p-3 bg-white/10 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
                                     <Sparkles className="h-8 w-8 text-purple-100" />
                                 </div>
-                                
+
                                 <div className="space-y-3 max-w-2xl">
                                     <h2 className="text-3xl md:text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-purple-100">
                                         Generate AI Career Analysis
@@ -238,7 +278,7 @@ export default function AnalysisPage() {
                                         Review your extracted profile below, then generate a comprehensive AI analysis to identify strengths, career paths, and improvement opportunities.
                                     </p>
                                 </div>
-                                
+
                                 {generateError && (
                                     <Alert variant="destructive" className="max-w-md bg-red-500/10 border-red-500/20 text-white backdrop-blur-sm">
                                         <AlertCircle className="h-4 w-4" />
@@ -267,12 +307,12 @@ export default function AnalysisPage() {
                                         )}
                                     </Button>
                                     <p className="text-xs font-medium text-purple-200/80 flex items-center gap-2">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"/>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                                         Powered by AI • Takes ~30 seconds
                                     </p>
                                 </div>
                             </div>
-                            
+
                             {/* Decorative background elements */}
                             <div className="absolute top-0 left-0 -translate-x-1/4 -translate-y-1/4 w-96 h-96 bg-purple-500/30 rounded-full blur-3xl mix-blend-overlay" />
                             <div className="absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 w-96 h-96 bg-indigo-500/30 rounded-full blur-3xl mix-blend-overlay" />
@@ -333,7 +373,7 @@ export default function AnalysisPage() {
                                                 )}
                                             </div>
                                         </div>
-                                        
+
                                         <div className="flex gap-3">
                                             {hasContactObj && (contactInfo as any).linkedin && (
                                                 <Button variant="outline" size="sm" asChild>
@@ -357,141 +397,141 @@ export default function AnalysisPage() {
                             </Card>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 [&>*:last-child:nth-child(odd)]:md:col-span-2">
-                            {/* Skills */}
-                            <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
-                                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                                    <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                                        <Award className="h-4 w-4 text-purple-500" />
-                                        Skills
-                                        <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.skills?.length || 0}</Badge>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="pt-4">
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {extractedInfo.skills?.slice(0, 12).map((skill, i) => (
-                                            <Badge key={i} variant="secondary" className="text-xs font-normal bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700">{skill}</Badge>
-                                        ))}
-                                        {(extractedInfo.skills?.length || 0) > 12 && (
-                                            <Badge variant="outline" className="text-xs border-dashed">
-                                                +{extractedInfo.skills!.length - 12} more
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* Experience */}
-                            <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
-                                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                                    <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                                        <Briefcase className="h-4 w-4 text-purple-500" />
-                                        Experience
-                                        <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.experience?.length || 0}</Badge>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-4">
-                                    {extractedInfo.experience?.slice(0, 3).map((exp, i) => (
-                                        <div key={i} className="text-sm group">
-                                            <div className="font-medium truncate group-hover:text-purple-600 transition-colors">{exp.role}</div>
-                                            <div className="text-muted-foreground text-xs truncate">{exp.company}</div>
-                                            <div className="text-muted-foreground text-xs mt-0.5">{exp.duration}</div>
-                                        </div>
-                                    ))}
-                                    {(extractedInfo.experience?.length || 0) > 3 && (
-                                        <p className="text-xs text-muted-foreground pt-2 border-t border-slate-100 dark:border-slate-800">
-                                            +{extractedInfo.experience!.length - 3} more roles
-                                        </p>
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            {/* Education */}
-                            <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
-                                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                                    <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                                        <GraduationCap className="h-4 w-4 text-purple-500" />
-                                        Education
-                                        <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.education?.length || 0}</Badge>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4 pt-4">
-                                    {extractedInfo.education?.slice(0, 2).map((edu, i) => (
-                                        <div key={i} className="text-sm group">
-                                            <div className="font-medium truncate group-hover:text-purple-600 transition-colors">{edu.degree}</div>
-                                            <div className="text-muted-foreground text-xs truncate">{edu.institution}</div>
-                                            <div className="text-muted-foreground text-xs mt-0.5">{edu.year}</div>
-                                        </div>
-                                    ))}
-                                </CardContent>
-                            </Card>
-
-                            {/* Projects (if any) */}
-                            {extractedInfo.projects && extractedInfo.projects.length > 0 && (
-                                <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
-                                    <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                                            <FolderOpen className="h-4 w-4 text-purple-500" />
-                                            Projects
-                                            <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.projects.length}</Badge>
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3 pt-4">
-                                        {extractedInfo.projects.slice(0, 3).map((proj, i) => (
-                                            <div key={i} className="text-sm">
-                                                <div className="font-medium truncate">{proj.name}</div>
-                                                {proj.technologies && proj.technologies.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1 mt-1.5">
-                                                        {proj.technologies.slice(0, 3).map((tech, j) => (
-                                                            <span key={j} className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-400">{tech}</span>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {/* Leadership (if any) */}
-                            {extractedInfo.leadership && extractedInfo.leadership.length > 0 && (
+                                {/* Skills */}
                                 <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
                                     <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
                                         <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
                                             <Award className="h-4 w-4 text-purple-500" />
-                                            Leadership
-                                            <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.leadership.length}</Badge>
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-3 pt-4">
-                                        {extractedInfo.leadership.slice(0, 3).map((lead, i) => (
-                                            <div key={i} className="text-sm">
-                                                <div className="font-medium truncate">{lead.role}</div>
-                                                <div className="text-muted-foreground text-xs truncate">{lead.organization}</div>
-                                            </div>
-                                        ))}
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {/* Languages (if any) */}
-                            {extractedInfo.languages && extractedInfo.languages.length > 0 && (
-                                <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
-                                    <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
-                                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                                            <Globe className="h-4 w-4 text-purple-500" />
-                                            Languages
+                                            Skills
+                                            <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.skills?.length || 0}</Badge>
                                         </CardTitle>
                                     </CardHeader>
                                     <CardContent className="pt-4">
                                         <div className="flex flex-wrap gap-1.5">
-                                            {extractedInfo.languages.map((lang, i) => (
-                                                <Badge key={i} variant="outline" className="text-xs font-normal">{lang}</Badge>
+                                            {extractedInfo.skills?.slice(0, 12).map((skill, i) => (
+                                                <Badge key={i} variant="secondary" className="text-xs font-normal bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700">{skill}</Badge>
                                             ))}
+                                            {(extractedInfo.skills?.length || 0) > 12 && (
+                                                <Badge variant="outline" className="text-xs border-dashed">
+                                                    +{extractedInfo.skills!.length - 12} more
+                                                </Badge>
+                                            )}
                                         </div>
                                     </CardContent>
                                 </Card>
-                            )}
-                        </div>
+
+                                {/* Experience */}
+                                <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                    <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                            <Briefcase className="h-4 w-4 text-purple-500" />
+                                            Experience
+                                            <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.experience?.length || 0}</Badge>
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4 pt-4">
+                                        {extractedInfo.experience?.slice(0, 3).map((exp, i) => (
+                                            <div key={i} className="text-sm group">
+                                                <div className="font-medium truncate group-hover:text-purple-600 transition-colors">{exp.role}</div>
+                                                <div className="text-muted-foreground text-xs truncate">{exp.company}</div>
+                                                <div className="text-muted-foreground text-xs mt-0.5">{exp.duration}</div>
+                                            </div>
+                                        ))}
+                                        {(extractedInfo.experience?.length || 0) > 3 && (
+                                            <p className="text-xs text-muted-foreground pt-2 border-t border-slate-100 dark:border-slate-800">
+                                                +{extractedInfo.experience!.length - 3} more roles
+                                            </p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                {/* Education */}
+                                <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                    <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                            <GraduationCap className="h-4 w-4 text-purple-500" />
+                                            Education
+                                            <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.education?.length || 0}</Badge>
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4 pt-4">
+                                        {extractedInfo.education?.slice(0, 2).map((edu, i) => (
+                                            <div key={i} className="text-sm group">
+                                                <div className="font-medium truncate group-hover:text-purple-600 transition-colors">{edu.degree}</div>
+                                                <div className="text-muted-foreground text-xs truncate">{edu.institution}</div>
+                                                <div className="text-muted-foreground text-xs mt-0.5">{edu.year}</div>
+                                            </div>
+                                        ))}
+                                    </CardContent>
+                                </Card>
+
+                                {/* Projects (if any) */}
+                                {extractedInfo.projects && extractedInfo.projects.length > 0 && (
+                                    <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                        <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                                <FolderOpen className="h-4 w-4 text-purple-500" />
+                                                Projects
+                                                <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.projects.length}</Badge>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3 pt-4">
+                                            {extractedInfo.projects.slice(0, 3).map((proj, i) => (
+                                                <div key={i} className="text-sm">
+                                                    <div className="font-medium truncate">{proj.name}</div>
+                                                    {proj.technologies && proj.technologies.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1 mt-1.5">
+                                                            {proj.technologies.slice(0, 3).map((tech, j) => (
+                                                                <span key={j} className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-400">{tech}</span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </CardContent>
+                                    </Card>
+                                )}
+
+                                {/* Leadership (if any) */}
+                                {extractedInfo.leadership && extractedInfo.leadership.length > 0 && (
+                                    <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                        <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                                <Award className="h-4 w-4 text-purple-500" />
+                                                Leadership
+                                                <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.leadership.length}</Badge>
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-3 pt-4">
+                                            {extractedInfo.leadership.slice(0, 3).map((lead, i) => (
+                                                <div key={i} className="text-sm">
+                                                    <div className="font-medium truncate">{lead.role}</div>
+                                                    <div className="text-muted-foreground text-xs truncate">{lead.organization}</div>
+                                                </div>
+                                            ))}
+                                        </CardContent>
+                                    </Card>
+                                )}
+
+                                {/* Languages (if any) */}
+                                {extractedInfo.languages && extractedInfo.languages.length > 0 && (
+                                    <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                        <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                                <Globe className="h-4 w-4 text-purple-500" />
+                                                Languages
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="pt-4">
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {extractedInfo.languages.map((lang, i) => (
+                                                    <Badge key={i} variant="outline" className="text-xs font-normal">{lang}</Badge>
+                                                ))}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -504,7 +544,7 @@ export default function AnalysisPage() {
                         initialData={extractedInfo}
                         onSave={handleSaveCVEdits}
                         title={cvValidation && !cvValidation.isComplete ? "Complete Your CV" : "Edit CV Data"}
-                        description={cvValidation && !cvValidation.isComplete 
+                        description={cvValidation && !cvValidation.isComplete
                             ? "Please fill in the missing required fields to enable full analysis"
                             : "Update your CV information before analysis or job matching"
                         }

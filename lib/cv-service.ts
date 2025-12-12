@@ -3,57 +3,132 @@ import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import { getExtractionPromptFragment } from '@/lib/resume-guidelines'
 
 export interface ValidationResult {
-    status: 'valid' | 'incomplete' | 'invalid'
-    missingInfoQuestions?: string[]
-    rejectionReason?: string
-    extractedInfo?: {
-        name: string
-        contactInfo: {
-            email?: string
-            phone?: string
-            location?: string
-            linkedin?: string
-            github?: string
-            website?: string
-            raw?: string
-        }
-        summary: string
-        experience: Array<{
-            role: string
-            company: string
-            location?: string
-            duration: string
-            description?: string
-            highlights?: string[]
-        }>
-        skills: string[]
-        inferredSkills: string[]  // Skills inferred from context, not explicitly listed
-        education: Array<{
-            degree: string
-            institution: string
-            location?: string
-            year: string
-            gpa?: string
-            coursework?: string[]
-            activities?: string[]
-        }>
-        projects: Array<{ name: string, description: string, technologies: string[], link?: string, duration?: string }>
-        certifications: Array<{ name: string, issuer: string, year: string }>
-        languages: string[]
-        leadership: Array<{
-            role: string
-            organization: string
-            duration: string
-            description?: string
-            highlights?: string[]
-        }>
-        seniorityLevel: 'entry' | 'junior' | 'mid' | 'senior' | 'lead' | 'principal' | 'director' | 'executive'
-        yearsOfExperience: number
-        industries: string[]
-        primaryFunctions: string[]
+  status: 'valid' | 'incomplete' | 'invalid'
+  missingInfoQuestions?: string[]
+  rejectionReason?: string
+  extractedInfo?: {
+    name: string
+    contactInfo: {
+      email?: string
+      phone?: string
+      location?: string
+      linkedin?: string
+      github?: string
+      website?: string
+      raw?: string
     }
-    issues?: string[]
-    formatType?: 'bullet' | 'paragraph' | 'mixed'
+    summary: string
+    experience: Array<{
+      role: string
+      company: string
+      location?: string
+      duration: string
+      description?: string
+      highlights?: string[]
+    }>
+    skills: string[]
+    inferredSkills: string[]  // Skills inferred from context, not explicitly listed
+    education: Array<{
+      degree: string
+      institution: string
+      location?: string
+      year: string
+      gpa?: string
+      coursework?: string[]
+      activities?: string[]
+    }>
+    projects: Array<{ name: string, description: string, technologies: string[], link?: string, duration?: string }>
+    certifications: Array<{ name: string, issuer: string, year: string }>
+    languages: string[]
+    leadership: Array<{
+      role: string
+      organization: string
+      duration: string
+      description?: string
+      highlights?: string[]
+    }>
+    seniorityLevel: 'entry' | 'junior' | 'mid' | 'senior' | 'lead' | 'principal' | 'director' | 'executive'
+    yearsOfExperience: number
+    industries: string[]
+    primaryFunctions: string[]
+  }
+  issues?: string[]
+  formatType?: 'bullet' | 'paragraph' | 'mixed'
+}
+
+// Helper to convert extractedInfo to a text format for analysis
+// This is used when we only have the extracted metadata in the DB but need to "simulate" reading the CV for LLM prompts
+export function formatExtractedInfoForAnalysis(info: Record<string, unknown>): string {
+  const sections: string[] = []
+
+  if (info.name) sections.push(`Name: ${info.name}`)
+
+  if (info.contactInfo) {
+    const contact = info.contactInfo as Record<string, unknown>
+    const contactParts = []
+    if (contact.email) contactParts.push(`Email: ${contact.email}`)
+    if (contact.phone) contactParts.push(`Phone: ${contact.phone}`)
+    if (contact.location) contactParts.push(`Location: ${contact.location}`)
+    if (contact.linkedin) contactParts.push(`LinkedIn: ${contact.linkedin}`)
+    if (contact.github) contactParts.push(`GitHub: ${contact.github}`)
+    if (contactParts.length) sections.push(`Contact:\n${contactParts.join('\n')}`)
+  }
+
+  if (info.summary) sections.push(`Summary:\n${info.summary}`)
+
+  if (info.seniorityLevel) sections.push(`Seniority Level: ${info.seniorityLevel}`)
+  if (info.yearsOfExperience !== undefined) sections.push(`Years of Experience: ${info.yearsOfExperience}`)
+
+  if (Array.isArray(info.skills) && info.skills.length) {
+    sections.push(`Skills:\n${info.skills.join(', ')}`)
+  }
+
+  if (Array.isArray(info.experience) && info.experience.length) {
+    const expText = info.experience.map((exp: any) => {
+      const parts = [`${exp.role || exp.title} at ${exp.company}`]
+      if (exp.duration) parts.push(`(${exp.duration})`)
+      if (exp.description) parts.push(`\n  ${exp.description}`)
+      if (Array.isArray(exp.highlights)) parts.push(`\n  - ${exp.highlights.join('\n  - ')}`)
+      return parts.join(' ')
+    }).join('\n\n')
+    sections.push(`Experience:\n${expText}`)
+  }
+
+  if (Array.isArray(info.education) && info.education.length) {
+    const eduText = info.education.map((edu: any) => {
+      return `${edu.degree} - ${edu.institution}${edu.year ? ` (${edu.year})` : ''}`
+    }).join('\n')
+    sections.push(`Education:\n${eduText}`)
+  }
+
+  if (Array.isArray(info.certifications) && info.certifications.length) {
+    const certText = info.certifications.map((cert: any) => {
+      return typeof cert === 'string' ? cert : `${cert.name}${cert.issuer ? ` - ${cert.issuer}` : ''}`
+    }).join('\n')
+    sections.push(`Certifications:\n${certText}`)
+  }
+
+  if (Array.isArray(info.projects) && info.projects.length) {
+    const projText = info.projects.map((proj: any) => {
+      const parts = [proj.name || proj.title]
+      if (proj.description) parts.push(`: ${proj.description}`)
+      if (Array.isArray(proj.technologies)) parts.push(` [${proj.technologies.join(', ')}]`)
+      return parts.join('')
+    }).join('\n')
+    sections.push(`Projects:\n${projText}`)
+  }
+
+  if (Array.isArray(info.leadership) && info.leadership.length) {
+    const leadText = info.leadership.map((lead: any) => {
+      const parts = [lead.role || lead.title]
+      if (lead.scope) parts.push(`: ${lead.scope}`)
+      if (lead.impact) parts.push(` - Impact: ${lead.impact}`)
+      return parts.join('')
+    }).join('\n')
+    sections.push(`Leadership:\n${leadText}`)
+  }
+
+  return sections.join('\n\n')
 }
 
 const INPUT_VALIDATION_PROMPT = `You are an expert CV/Resume parser and validator. Your job is to:
@@ -179,24 +254,25 @@ SKILL EXTRACTION IS CRITICAL:
 Rules:
 - Status "invalid": Use for completely irrelevant content (not a CV at all)
 - Status "incomplete": Use if missing Name, all Contact Info, OR has no Experience AND no Education
-- Status "valid": Has Name, some Contact Info, AND (Experience OR Education)`
+- Status "valid": Has Name, some Contact Info, AND (Experience OR Education)
+`;
 
 /**
  * Validates and extracts metadata from CV content using AI.
  * This is a shared service function used by multiple API endpoints.
  */
 export async function extractCVMetadataWithAI(cvContent: string): Promise<ValidationResult> {
-    const messages: ChatCompletionMessageParam[] = [
-        { role: 'system', content: INPUT_VALIDATION_PROMPT },
-        { role: 'user', content: `Validate this CV:\n\n${cvContent}` }
-    ]
+  const messages: ChatCompletionMessageParam[] = [
+    { role: 'system', content: INPUT_VALIDATION_PROMPT },
+    { role: 'user', content: `Validate this CV:\n\n${cvContent}` }
+  ]
 
-    const completion = await openai.chat.completions.create({
-        model: DEFAULT_MODEL,
-        messages,
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
-    })
+  const completion = await openai.chat.completions.create({
+    model: DEFAULT_MODEL,
+    messages,
+    response_format: { type: 'json_object' },
+    temperature: 0.3,
+  })
 
-    return JSON.parse(completion.choices[0]?.message?.content || '{}') as ValidationResult
+  return JSON.parse(completion.choices[0]?.message?.content || '{}') as ValidationResult
 }

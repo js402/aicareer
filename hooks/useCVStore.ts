@@ -16,6 +16,7 @@ interface CVStore {
     setJobDescription: (jobDescription: string) => void
     setExtractedInfo: (extractedInfo: ExtractedCVInfo, metadataId?: string) => void
     updateExtractedInfo: (extractedInfo: ExtractedCVInfo) => void
+    setSyncedCV: (metadataId: string) => void
     appendSupplementalInfo: (questions: string[], answers: string[]) => void
     clear: () => void
 }
@@ -35,7 +36,12 @@ export const useCVStore = create<CVStore>()(
             setGuidance: (guidance) => set({ guidance }),
             setJobDescription: (jobDescription) => set({ jobDescription }),
             setExtractedInfo: (extractedInfo, metadataId) => set({ extractedInfo, ...(metadataId && { metadataId }) }),
-            updateExtractedInfo: (extractedInfo) => set((state) => ({ 
+            setSyncedCV: (metadataId) => set((state) => ({
+                metadataId,
+                content: '', // Clear raw content as it's now in DB
+                analysis: '', // Clear old analysis
+            })),
+            updateExtractedInfo: (extractedInfo) => set((state) => ({
                 extractedInfo,
                 // Clear analysis when CV data changes significantly
                 analysis: ''

@@ -4,6 +4,7 @@ import { useMutation } from '@/hooks/useFetch'
 
 interface CreateCheckoutPayload {
     priceId: string
+    redirectUrl?: string
 }
 
 interface CreateCheckoutResponse {

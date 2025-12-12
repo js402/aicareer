@@ -8,7 +8,15 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export const POST = withAuth(async (req, { user }) => {
     try {
-        const { priceId } = await req.json()
+        const { priceId, redirectUrl } = await req.json()
+
+        // Validate redirectUrl to be relative or same origin
+        let successPath = '/career-guidance'
+        if (redirectUrl && (redirectUrl.startsWith('/') || redirectUrl.startsWith(req.headers.get('origin') || ''))) {
+            // If absolute URL, strip origin to get path, or use as is if relative
+            const origin = req.headers.get('origin') || ''
+            successPath = redirectUrl.replace(origin, '')
+        }
 
         // Create Checkout Session
         const session = await stripe.checkout.sessions.create({
@@ -20,7 +28,7 @@ export const POST = withAuth(async (req, { user }) => {
                 },
             ],
             mode: 'subscription',
-            success_url: `${req.headers.get('origin')}/career-guidance?session_id={CHECKOUT_SESSION_ID}`,
+            success_url: `${req.headers.get('origin')}${successPath}${successPath.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${req.headers.get('origin')}/checkout/cancel`,
             client_reference_id: user.id,
             metadata: {

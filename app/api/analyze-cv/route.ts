@@ -7,78 +7,7 @@ import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import { getAnalysisPromptFragment, getExtractionPromptFragment } from '@/lib/resume-guidelines'
 
 // Helper to convert extractedInfo to a text format for analysis
-function formatExtractedInfoForAnalysis(info: Record<string, unknown>): string {
-    const sections: string[] = []
-    
-    if (info.name) sections.push(`Name: ${info.name}`)
-    
-    if (info.contactInfo) {
-        const contact = info.contactInfo as Record<string, unknown>
-        const contactParts = []
-        if (contact.email) contactParts.push(`Email: ${contact.email}`)
-        if (contact.phone) contactParts.push(`Phone: ${contact.phone}`)
-        if (contact.location) contactParts.push(`Location: ${contact.location}`)
-        if (contact.linkedin) contactParts.push(`LinkedIn: ${contact.linkedin}`)
-        if (contact.github) contactParts.push(`GitHub: ${contact.github}`)
-        if (contactParts.length) sections.push(`Contact:\n${contactParts.join('\n')}`)
-    }
-    
-    if (info.summary) sections.push(`Summary:\n${info.summary}`)
-    
-    if (info.seniorityLevel) sections.push(`Seniority Level: ${info.seniorityLevel}`)
-    if (info.yearsOfExperience !== undefined) sections.push(`Years of Experience: ${info.yearsOfExperience}`)
-    
-    if (Array.isArray(info.skills) && info.skills.length) {
-        sections.push(`Skills:\n${info.skills.join(', ')}`)
-    }
-    
-    if (Array.isArray(info.experience) && info.experience.length) {
-        const expText = info.experience.map((exp: any) => {
-            const parts = [`${exp.role || exp.title} at ${exp.company}`]
-            if (exp.duration) parts.push(`(${exp.duration})`)
-            if (exp.description) parts.push(`\n  ${exp.description}`)
-            if (Array.isArray(exp.highlights)) parts.push(`\n  - ${exp.highlights.join('\n  - ')}`)
-            return parts.join(' ')
-        }).join('\n\n')
-        sections.push(`Experience:\n${expText}`)
-    }
-    
-    if (Array.isArray(info.education) && info.education.length) {
-        const eduText = info.education.map((edu: any) => {
-            return `${edu.degree} - ${edu.institution}${edu.year ? ` (${edu.year})` : ''}`
-        }).join('\n')
-        sections.push(`Education:\n${eduText}`)
-    }
-    
-    if (Array.isArray(info.certifications) && info.certifications.length) {
-        const certText = info.certifications.map((cert: any) => {
-            return typeof cert === 'string' ? cert : `${cert.name}${cert.issuer ? ` - ${cert.issuer}` : ''}`
-        }).join('\n')
-        sections.push(`Certifications:\n${certText}`)
-    }
-    
-    if (Array.isArray(info.projects) && info.projects.length) {
-        const projText = info.projects.map((proj: any) => {
-            const parts = [proj.name || proj.title]
-            if (proj.description) parts.push(`: ${proj.description}`)
-            if (Array.isArray(proj.technologies)) parts.push(` [${proj.technologies.join(', ')}]`)
-            return parts.join('')
-        }).join('\n')
-        sections.push(`Projects:\n${projText}`)
-    }
-    
-    if (Array.isArray(info.leadership) && info.leadership.length) {
-        const leadText = info.leadership.map((lead: any) => {
-            const parts = [lead.role || lead.title]
-            if (lead.scope) parts.push(`: ${lead.scope}`)
-            if (lead.impact) parts.push(` - Impact: ${lead.impact}`)
-            return parts.join('')
-        }).join('\n')
-        sections.push(`Leadership:\n${leadText}`)
-    }
-    
-    return sections.join('\n\n')
-}
+import { formatExtractedInfoForAnalysis } from '@/lib/cv-service'
 
 
 
@@ -163,10 +92,10 @@ export const POST = withAuth(async (request, { supabase, user }) => {
 
         // Determine content for analysis - prefer cvContent, fall back to extractedInfo
         const hasRawContent = cvContent && !cvContent.match(/^\[CV content for .+\]$/)
-        
+
         let contentForAnalysis: string
         let cvHash: string
-        
+
         if (hasRawContent) {
             contentForAnalysis = cvContent!
             cvHash = await hashCV(cvContent!)

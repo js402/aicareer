@@ -6,6 +6,7 @@ import { rateLimit } from '@/middleware/rateLimit'
 import { validateInput, careerGuidanceSchema } from '@/lib/validation'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import { hashCV } from '@/lib/cv-cache'
+import { formatExtractedInfoForAnalysis } from '@/lib/cv-service'
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -162,10 +163,22 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        const { cvContent } = inputValidation.data
+        const { cvContent, extractedInfo } = inputValidation.data
 
         // Check cache first
-        const cvHash = await hashCV(cvContent)
+        let cvHash: string
+        let contextContent: string
+
+        if (cvContent) {
+            cvHash = await hashCV(cvContent)
+            contextContent = cvContent
+        } else if (extractedInfo) {
+            contextContent = formatExtractedInfoForAnalysis(extractedInfo)
+            cvHash = await hashCV(contextContent)
+        } else {
+            return NextResponse.json({ error: 'CV content or extracted info required' }, { status: 400 })
+        }
+
         const { data: cachedGuidance } = await supabase
             .from('career_guidance')
             .select('*')
@@ -187,7 +200,7 @@ export async function POST(req: NextRequest) {
             {
                 role: 'user', content: `Extract career information from this CV:
 
-${cvContent}`
+${contextContent}`
             }
         ]
 

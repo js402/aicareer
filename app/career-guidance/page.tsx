@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Navbar } from "@/components/navbar"
 import { ArrowLeft, Target, TrendingUp, Map, Download, Loader2, Sparkles, Briefcase, Edit } from "lucide-react"
-import { useSubscription } from '@/hooks/useSubscription'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCVStore } from "@/hooks/useCVStore"
 import { useMutation } from "@/hooks/useFetch"
 import { PageLoader } from "@/components/ui/loading-spinner"
 import { StatusAlert } from "@/components/ui/status-alert"
 import { useLoadingState } from "@/hooks/useLoadingState"
+import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { StrategicPathTab } from "@/components/career-guidance/strategic-path-tab"
 import { MarketValueTab } from "@/components/career-guidance/market-value-tab"
 import { SkillGapTab } from "@/components/career-guidance/skill-gap-tab"
@@ -58,15 +58,24 @@ export interface CareerGuidance {
 
 export default function CareerGuidancePage() {
     const router = useRouter()
-    const { hasProAccess } = useSubscription()
+
     const { content: cvContent, guidance, setGuidance, extractedInfo, updateExtractedInfo, metadataId } = useCVStore()
+    // No longer strictly require cvContent here, as we use extractedInfo from DB
+    const { isAuthenticated, isLoading: authLoading } = useAuthGuard({
+        redirectTo: 'career-guidance',
+        // If we have metadataId, we are good. But AuthGuard basically checks login.
+        // We can pass `requireCV: false` and check manually or pass metadataId if we extend the hook.
+        // For now, let's remove strict checks here and handle missing data in the component.
+        requireCV: false
+    })
+
     const loadingState = useLoadingState()
 
     const [suggestions, setSuggestions] = useState<CareerPathSuggestions | null>(null)
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
     const [isEditorOpen, setIsEditorOpen] = useState(false)
 
-    const { mutate: postGuidance } = useMutation<{ cvContent: string }, { guidance: any }>(
+    const { mutate: postGuidance } = useMutation<{ cvContent?: string; extractedInfo?: ExtractedCVInfo }, { guidance: any }>(
         '/api/career-guidance',
         'POST',
         {
@@ -75,10 +84,11 @@ export default function CareerGuidancePage() {
         }
     )
 
-    const generateGuidance = useCallback(async (content: string) => {
+    const generateGuidance = useCallback(async (content?: string, info?: ExtractedCVInfo) => {
+        if (!content && !info) return
         await loadingState.execute(
             async () => {
-                await postGuidance({ cvContent: content })
+                await postGuidance({ cvContent: content, extractedInfo: info })
             },
             {
                 errorMessage: 'Failed to generate career guidance'
@@ -86,7 +96,7 @@ export default function CareerGuidancePage() {
         )
     }, [postGuidance, loadingState])
 
-    const { mutate: postSuggestions } = useMutation<{ cvContent: string }, { suggestions: any }>(
+    const { mutate: postSuggestions } = useMutation<{ cvContent?: string; extractedInfo?: ExtractedCVInfo }, { suggestions: any }>(
         '/api/career-path-suggestions',
         'POST',
         {
@@ -95,36 +105,33 @@ export default function CareerGuidancePage() {
         }
     )
 
-    const generateSuggestions = useCallback(async (content: string) => {
+    const generateSuggestions = useCallback(async (content?: string, info?: ExtractedCVInfo) => {
+        if (!content && !info) return
         setIsLoadingSuggestions(true)
         try {
-            await postSuggestions({ cvContent: content })
+            await postSuggestions({ cvContent: content, extractedInfo: info })
         } finally {
             setIsLoadingSuggestions(false)
         }
     }, [postSuggestions])
 
     useEffect(() => {
-        if (!hasProAccess) return
-
-        if (!cvContent) {
-            router.push('/cv-review') // Or /analysis or /
-            return
-        }
+        if (!isAuthenticated) return
+        if (!cvContent && !extractedInfo) return
 
         // Auto-generate guidance if user has pro access and we don't have it yet
-        if (hasProAccess && !guidance) {
-            generateGuidance(cvContent)
+        if (!guidance && !loadingState.isLoading && !loadingState.error) {
+            generateGuidance(cvContent || undefined, extractedInfo || undefined)
         }
-        if (hasProAccess && !suggestions) {
-            generateSuggestions(cvContent)
+        if (!suggestions && !isLoadingSuggestions) {
+            generateSuggestions(cvContent || undefined, extractedInfo || undefined)
         }
-    }, [hasProAccess, guidance, suggestions, router, cvContent, generateGuidance, generateSuggestions])
+    }, [isAuthenticated, guidance, suggestions, cvContent, extractedInfo, generateGuidance, generateSuggestions, loadingState.isLoading, loadingState.error, isLoadingSuggestions])
 
     const handleSaveCVEdits = async (updatedInfo: ExtractedCVInfo) => {
         // Update local state
         updateExtractedInfo(updatedInfo)
-        
+
         // If we have a metadataId, save to the database
         if (metadataId) {
             try {
@@ -133,10 +140,9 @@ export default function CareerGuidancePage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ extractedInfo: updatedInfo })
                 })
-                
-                if (!response.ok) {
-                    console.error('Failed to save CV edits to database')
-                }
+
+                // If we updated the CV, we might want to re-generate guidance if it's based on old data
+                // But let's leave that to the user to clear or re-request for now
             } catch (error) {
                 console.error('Error saving CV edits:', error)
             }
@@ -180,9 +186,11 @@ ${JSON.stringify(guidance.skillGap, null, 2)}
         return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount)
     }
 
-    if (!hasProAccess) {
+    if (authLoading) {
         return <PageLoader message="Checking subscription..." />
     }
+
+    if (!isAuthenticated) return null // Will redirect in hook
 
     return (
         <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">

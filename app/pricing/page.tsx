@@ -13,12 +13,16 @@ interface SubscriptionStatus {
     isPro: boolean
 }
 
+import { useSearchParams } from "next/navigation"
+
 export default function PricingPage() {
+    const searchParams = useSearchParams()
+    const redirect = searchParams.get('redirect')
     const { data: subscription } = useFetch<SubscriptionStatus>(
         '/api/subscription/status',
         { skip: false }
     )
-    
+
     const isPro = subscription?.isPro ?? false
 
     const plans = [
@@ -54,7 +58,7 @@ export default function PricingPage() {
                 "Downloadable reports"
             ],
             cta: "Upgrade to Pro",
-            href: "/checkout",
+            href: `/checkout${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''}`,
             popular: true,
             planType: "pro"
         },

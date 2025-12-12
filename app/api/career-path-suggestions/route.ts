@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { hasProAccess } from '@/lib/subscription'
 import { rateLimit } from '@/middleware/rateLimit'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import { formatExtractedInfoForAnalysis } from '@/lib/cv-service'
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
@@ -75,17 +76,23 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json()
-        const { cvContent } = body
+        const { cvContent, extractedInfo } = body
 
-        if (!cvContent) {
-            return NextResponse.json({ error: 'CV content is required' }, { status: 400 })
+        let contextContent: string
+
+        if (cvContent) {
+            contextContent = cvContent
+        } else if (extractedInfo) {
+            contextContent = formatExtractedInfoForAnalysis(extractedInfo)
+        } else {
+            return NextResponse.json({ error: 'CV content or extracted info required' }, { status: 400 })
         }
 
         const messages: ChatCompletionMessageParam[] = [
             { role: 'system', content: SUGGESTIONS_PROMPT },
             {
                 role: 'user',
-                content: `Based on this CV, provide the career path suggestions:\n\n${cvContent.substring(0, 15000)}` // Truncate to avoid token limits if CV is huge
+                content: `Based on this CV, provide the career path suggestions:\n\n${contextContent.substring(0, 15000)}` // Truncate to avoid token limits if CV is huge
             }
         ]
 

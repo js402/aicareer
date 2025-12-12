@@ -58,12 +58,12 @@ export default function CVReviewPage() {
                 router.push('/analysis')
             } else {
                 // User needs to sign in
-                router.push(authStatus.redirectUrl)
+                router.push(authStatus.redirectUrl.replace('analysis', 'onboarding'))
             }
         } catch (error) {
             console.error('Auth check failed:', error)
             // Fallback to auth page
-            router.push('/auth?redirect=analysis')
+            router.push('/auth?redirect=onboarding')
         }
     }
 

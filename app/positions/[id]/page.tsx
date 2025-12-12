@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation'
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Sparkles, Loader2, RefreshCw, ExternalLink } from "lucide-react"
+import { Sparkles, Loader2, RefreshCw, ExternalLink, Lock } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PositionHeader } from "@/components/positions/PositionHeader"
 import { NotesCard } from "@/components/positions/NotesCard"
 import { useAuthGuard } from "@/hooks/useAuthGuard"
+import { useSubscription } from "@/hooks/useSubscription"
 import { MatchScoreCircle } from "@/components/analysis/match-score-circle"
 import { EmailGenerator } from "@/components/positions/EmailGenerator"
 import { useFetch, useMutation } from "@/hooks/useFetch"
@@ -80,6 +81,7 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     const { isLoading: authLoading, isAuthenticated } = useAuthGuard({ redirectTo: `positions/${id}` })
     const router = useRouter()
     const { metadataId: storeCvMetadataId, extractedInfo } = useCVStore()
+    const { hasProAccess } = useSubscription()
 
     const [notes, setNotes] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
@@ -278,7 +280,7 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
                     <div className="text-center py-12">
                         <h2 className="text-xl font-semibold text-red-600 mb-2">Failed to load position</h2>
                         <p className="text-muted-foreground mb-4">{fetchError.message}</p>
-                        <button 
+                        <button
                             onClick={() => router.push('/positions')}
                             className="text-blue-600 hover:underline"
                         >
@@ -413,14 +415,19 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
                                     Generate a CV tailored specifically for this position based on your skills and the job requirements.
                                 </p>
                                 <Button
-                                    className="w-full bg-purple-600 hover:bg-purple-700"
-                                    onClick={handleGenerateCV}
+                                    className={`w-full ${!hasProAccess ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                                    onClick={!hasProAccess ? () => router.push(`/pricing?redirect=/positions/${id}`) : handleGenerateCV}
                                     disabled={isGenerating || !(position.cv_metadata_id || storeCvMetadataId)}
                                 >
                                     {isGenerating ? (
                                         <>
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                             Generating...
+                                        </>
+                                    ) : !hasProAccess ? (
+                                        <>
+                                            <Lock className="mr-2 h-4 w-4" />
+                                            Upgrade to Tailor CV
                                         </>
                                     ) : (
                                         <>
@@ -488,11 +495,11 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
                                 </SelectTrigger>
                                 <SelectContent>
                                     {cvList.map((cv) => (
-                                        <SelectItem 
-                                            key={cv.id} 
+                                        <SelectItem
+                                            key={cv.id}
                                             value={cv.id}
                                         >
-                                            {cv.display_name || cv.filename || 'CV'} 
+                                            {cv.display_name || cv.filename || 'CV'}
                                             {cv.confidence_score ? ` • ${Math.round(cv.confidence_score * 100)}%` : ''}
                                         </SelectItem>
                                     ))}
@@ -500,7 +507,7 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
                             </Select>
                             {position.cv_metadata_id && (
                                 <p className="text-xs text-muted-foreground mt-2">
-                                    Last analyzed with: {cvList.find(cv => cv.id === position.cv_metadata_id)?.display_name || 
+                                    Last analyzed with: {cvList.find(cv => cv.id === position.cv_metadata_id)?.display_name ||
                                         cvList.find(cv => cv.id === position.cv_metadata_id)?.filename || 'Unknown CV'}
                                 </p>
                             )}

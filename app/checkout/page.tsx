@@ -8,7 +8,11 @@ import { Navbar } from "@/components/navbar"
 import { ArrowLeft, ShieldCheck, Loader2, CreditCard, CheckCircle } from "lucide-react"
 import { useCreateCheckoutSession } from '@/hooks/useCheckout'
 
+import { useSearchParams } from 'next/navigation'
+
 export default function CheckoutPage() {
+    const searchParams = useSearchParams()
+    const redirect = searchParams.get('redirect')
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string>('')
     const { mutate: createSession } = useCreateCheckoutSession()
@@ -20,6 +24,7 @@ export default function CheckoutPage() {
         try {
             const result = await createSession({
                 priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || 'price_1234567890',
+                redirectUrl: redirect || undefined,
             })
             const { sessionUrl, error: apiError } = result || {}
             if (apiError) throw new Error(apiError)
