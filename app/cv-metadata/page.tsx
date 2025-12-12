@@ -111,11 +111,20 @@ export default function CVMetadataPage() {
 
             if (!response.ok) {
                 if (response.status === 404) {
-                    loadingState.setError('Analysis content not found. This CV might not have been fully analyzed yet.')
+                    // No stored CV content found - we still have metadata, so navigate to analysis
+                    // The analysis page will work with the extracted info we have
+                    clear()
+                    // Use a placeholder for CV content - the extracted info is what matters
+                    const cvName = item.extracted_info?.name || 'Unknown'
+                    setCV(`[CV content for ${cvName}]`, `${cvName}_CV`)
+                    setExtractedInfo(item.extracted_info)
+                    // No analysis yet - user can generate it on the analysis page
+                    router.push('/analysis')
+                    return
                 } else {
-                    loadingState.setError('Failed to retrieve analysis.')
+                    loadingState.setError('Failed to retrieve CV data.')
+                    return
                 }
-                return
             }
 
             const data = await response.json()
@@ -132,7 +141,7 @@ export default function CVMetadataPage() {
 
         } catch (error) {
             console.error('Failed to load analysis:', error)
-            loadingState.setError('An error occurred while loading the analysis.')
+            loadingState.setError('An error occurred while loading the CV.')
         } finally {
             setLoadingAnalysisHash(null)
         }

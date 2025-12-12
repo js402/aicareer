@@ -83,6 +83,17 @@ export function CVMetadataDisplay({ extractedInfo, isLoading }: CVMetadataDispla
                         </div>
 
                         {/* Experience & Education */}
+                        {/* Summary */}
+                        {extractedInfo.summary && (
+                            <div className="pt-4 border-t">
+                                <div className="font-medium mb-1">Professional Summary</div>
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                    {extractedInfo.summary}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Experience & Education */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
                             <div>
                                 <div className="flex items-center gap-2 mb-3">
@@ -132,6 +143,94 @@ export function CVMetadataDisplay({ extractedInfo, isLoading }: CVMetadataDispla
                                 </div>
                             </div>
                         </div>
+
+                        {/* Projects & Certifications */}
+                        {(extractedInfo.projects?.length > 0 || extractedInfo.certifications?.length > 0) && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
+                                {extractedInfo.projects?.length > 0 && (
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <FileText className="h-4 w-4 text-muted-foreground" />
+                                            <span className="font-medium">Projects</span>
+                                            <Badge variant="outline">
+                                                {extractedInfo.projects.length}
+                                            </Badge>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {extractedInfo.projects.slice(0, 3).map((proj, index) => (
+                                                <div key={index} className="text-sm">
+                                                    <div className="font-medium flex items-center gap-2">
+                                                        {proj.name}
+                                                        {proj.link && (
+                                                            <a href={proj.link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs">
+                                                                Link
+                                                            </a>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-muted-foreground text-xs line-clamp-2">{proj.description}</div>
+                                                    {proj.technologies && proj.technologies.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1 mt-1">
+                                                            {proj.technologies.slice(0, 3).map((tech, i) => (
+                                                                <span key={i} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">
+                                                                    {tech}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            {extractedInfo.projects.length > 3 && (
+                                                <div className="text-sm text-muted-foreground">
+                                                    +{extractedInfo.projects.length - 3} more projects
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {extractedInfo.certifications?.length > 0 && (
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Award className="h-4 w-4 text-muted-foreground" />
+                                            <span className="font-medium">Certifications</span>
+                                            <Badge variant="outline">
+                                                {extractedInfo.certifications.length}
+                                            </Badge>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {extractedInfo.certifications.slice(0, 3).map((cert, index) => (
+                                                <div key={index} className="text-sm">
+                                                    <div className="font-medium">{cert.name}</div>
+                                                    <div className="text-muted-foreground">{cert.issuer}</div>
+                                                    <div className="text-xs text-muted-foreground">{cert.year}</div>
+                                                </div>
+                                            ))}
+                                            {extractedInfo.certifications.length > 3 && (
+                                                <div className="text-sm text-muted-foreground">
+                                                    +{extractedInfo.certifications.length - 3} more certifications
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Languages */}
+                        {extractedInfo.languages?.length > 0 && (
+                            <div className="pt-4 border-t">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="font-medium">Languages:</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {extractedInfo.languages.map((lang, index) => (
+                                        <Badge key={index} variant="secondary" className="text-xs">
+                                            {lang}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="flex items-center justify-center py-8 text-muted-foreground">
