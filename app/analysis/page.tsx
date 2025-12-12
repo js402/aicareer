@@ -11,7 +11,7 @@ import { useCVStore } from "@/hooks/useCVStore"
 import { useSubscription } from "@/hooks/useSubscription"
 import { 
     ArrowLeft, Sparkles, Download, Edit, AlertCircle,
-    Briefcase, Target, ChevronRight, Loader2, User, GraduationCap,
+    Briefcase, Loader2, User, GraduationCap,
     Award, Globe, FolderOpen
 } from "lucide-react"
 import { downloadTextFile } from "@/lib/download-helpers"
@@ -20,8 +20,6 @@ import { StatusAlert } from "@/components/ui/status-alert"
 import { useCVOperations } from "@/hooks/useCVOperations"
 import { CVEditorModal, validateCV } from "@/components/cv-editor"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 
 export default function AnalysisPage() {
     const router = useRouter()
@@ -34,11 +32,18 @@ export default function AnalysisPage() {
     const [isAnalyzing, setIsAnalyzing] = useState(false)
     const [isEditorOpen, setIsEditorOpen] = useState(false)
     const [hasAutoOpenedEditor, setHasAutoOpenedEditor] = useState(false)
+    const [generateError, setGenerateError] = useState<string | null>(null)
 
     // Validate CV data to check completeness
     const cvValidation = useMemo(() => {
         return extractedInfo ? validateCV(extractedInfo) : null
     }, [extractedInfo])
+
+    // Check if we can generate analysis (have either raw content or extracted info)
+    const canGenerateAnalysis = useMemo(() => {
+        // We can analyze if we have extracted info (preferred) or raw CV content
+        return !!extractedInfo || (cvContent && !cvContent.match(/^\[CV content for .+\]$/))
+    }, [cvContent, extractedInfo])
 
     // Check authentication and load data
     useEffect(() => {
@@ -61,12 +66,18 @@ export default function AnalysisPage() {
                 return
             }
 
+            // If analysis already exists, go directly to report
+            if (analysis) {
+                router.replace('/analysis/report')
+                return
+            }
+
             setIsMounted(true)
             setIsLoading(false)
         }
 
         checkAuthAndLoad()
-    }, [cvContent, hasProAccess, subLoading, router])
+    }, [cvContent, hasProAccess, subLoading, router, analysis])
 
     // Extract metadata when CV content is available but no extracted info exists
     useEffect(() => {
@@ -84,18 +95,33 @@ export default function AnalysisPage() {
     }, [cvValidation, hasAutoOpenedEditor, cvOperations.isLoading])
 
     const handleAnalyze = async () => {
-        if (!cvContent) return
+        if (!canGenerateAnalysis) {
+            setGenerateError('No CV data available. Please upload a CV first.')
+            return
+        }
+        
         setIsAnalyzing(true)
-        await cvOperations.analyzeCV(cvContent)
-        setIsAnalyzing(false)
+        setGenerateError(null)
+        
+        try {
+            // Pass both cvContent and extractedInfo - API will use what's available
+            const result = await cvOperations.analyzeCV(cvContent || undefined, extractedInfo || undefined)
+            if (result?.analysis) {
+                router.push('/analysis/report')
+            } else if (cvOperations.error) {
+                setGenerateError(cvOperations.error)
+            } else {
+                setGenerateError('Failed to generate analysis. Please try again.')
+            }
+        } catch (error) {
+            setGenerateError(error instanceof Error ? error.message : 'An unexpected error occurred')
+        } finally {
+            setIsAnalyzing(false)
+        }
     }
 
     const handleDownload = () => {
-        if (analysis) {
-            downloadTextFile(analysis, `${filename}-analysis.txt`)
-        } else {
-            downloadTextFile(cvContent, filename)
-        }
+        downloadTextFile(cvContent, filename)
     }
 
     const handleSaveCVEdits = async (updatedInfo: typeof extractedInfo) => {
@@ -119,7 +145,7 @@ export default function AnalysisPage() {
     }
 
     if (!isMounted || isLoading || subLoading) {
-        return <PageLoader message="Loading analysis..." />
+        return <PageLoader message="Loading profile..." />
     }
 
     if (!hasProAccess) {
@@ -133,32 +159,32 @@ export default function AnalysisPage() {
         <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
             <Navbar />
 
-            <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
+            <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div>
                         <Button
                             variant="ghost"
-                            onClick={() => router.push('/cv-review')}
+                            onClick={() => router.push('/cv-metadata')}
                             className="gap-2 mb-2 -ml-4"
                         >
                             <ArrowLeft className="h-4 w-4" />
-                            Back
+                            Back to My CVs
                         </Button>
-                        <h1 className="text-2xl font-bold">{extractedInfo?.name || filename}</h1>
+                        <h1 className="text-2xl font-bold">Profile Preview</h1>
                         <p className="text-muted-foreground text-sm">
-                            {hasContactObj && (contactInfo as any).email}
-                            {hasContactObj && (contactInfo as any).location && ` · ${(contactInfo as any).location}`}
+                            {filename && <span className="font-medium">{filename}</span>}
+                            {extractedInfo?.name && <span> · {extractedInfo.name}</span>}
                         </p>
                     </div>
                     <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => setIsEditorOpen(true)}>
                             <Edit className="h-4 w-4 mr-2" />
-                            Edit
+                            Edit Profile
                         </Button>
                         <Button variant="outline" size="sm" onClick={handleDownload}>
                             <Download className="h-4 w-4 mr-2" />
-                            Download
+                            Download CV
                         </Button>
                     </div>
                 </div>
@@ -194,162 +220,159 @@ export default function AnalysisPage() {
                     </Card>
                 )}
 
-                {/* Main Content Grid */}
+                {/* Main Content */}
                 {extractedInfo && !cvOperations.isLoading && (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Left Column - CV Summary */}
-                        <div className="lg:col-span-2 space-y-6">
-                            {/* AI Analysis Card - Primary CTA */}
-                            <Card className={analysis ? "border-green-200 dark:border-green-900" : "border-purple-200 dark:border-purple-900"}>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="flex items-center gap-2 text-lg">
-                                        <Sparkles className="h-5 w-5 text-purple-600" />
-                                        AI Career Analysis
-                                    </CardTitle>
-                                    {!analysis && (
-                                        <CardDescription>
-                                            Get personalized insights on your strengths, career trajectory, and recommendations.
-                                        </CardDescription>
-                                    )}
-                                </CardHeader>
-                                <CardContent>
-                                    {!analysis ? (
-                                        <Button
-                                            onClick={handleAnalyze}
-                                            disabled={isAnalyzing}
-                                            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                                            size="lg"
-                                        >
-                                            {isAnalyzing ? (
-                                                <>
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    Analyzing your CV...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Sparkles className="mr-2 h-4 w-4" />
-                                                    Generate AI Analysis
-                                                </>
-                                            )}
-                                        </Button>
-                                    ) : (
-                                        <div className="prose dark:prose-invert prose-sm max-w-none max-h-[500px] overflow-y-auto">
-                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                {analysis}
-                                            </ReactMarkdown>
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            {/* Next Steps - Only show after analysis */}
-                            {analysis && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <Card 
-                                        className="cursor-pointer hover:border-blue-400 transition-colors"
-                                        onClick={() => router.push('/analysis/job-match')}
-                                    >
-                                        <CardContent className="pt-6">
-                                            <div className="flex items-start gap-4">
-                                                <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900">
-                                                    <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <h3 className="font-semibold mb-1">Job Match Analysis</h3>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        See how your CV matches specific job descriptions
-                                                    </p>
-                                                </div>
-                                                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-
-                                    <Card 
-                                        className="cursor-pointer hover:border-purple-400 transition-colors"
-                                        onClick={() => router.push('/career-guidance')}
-                                    >
-                                        <CardContent className="pt-6">
-                                            <div className="flex items-start gap-4">
-                                                <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900">
-                                                    <Briefcase className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <h3 className="font-semibold mb-1">Career Guidance</h3>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        Get personalized career advice and strategy
-                                                    </p>
-                                                </div>
-                                                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                                            </div>
-                                        </CardContent>
-                                    </Card>
+                    <div className="space-y-12">
+                        {/* Hero Section - Primary CTA */}
+                        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600 p-6 md:p-8 text-white shadow-2xl">
+                            <div className="relative z-10 flex flex-col items-center text-center space-y-6">
+                                <div className="inline-flex p-3 bg-white/10 rounded-2xl backdrop-blur-md border border-white/20 shadow-inner">
+                                    <Sparkles className="h-8 w-8 text-purple-100" />
                                 </div>
-                            )}
+                                
+                                <div className="space-y-3 max-w-2xl">
+                                    <h2 className="text-3xl md:text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-purple-100">
+                                        Generate AI Career Analysis
+                                    </h2>
+                                    <p className="text-purple-100 text-base md:text-lg leading-relaxed">
+                                        Review your extracted profile below, then generate a comprehensive AI analysis to identify strengths, career paths, and improvement opportunities.
+                                    </p>
+                                </div>
+                                
+                                {generateError && (
+                                    <Alert variant="destructive" className="max-w-md bg-red-500/10 border-red-500/20 text-white backdrop-blur-sm">
+                                        <AlertCircle className="h-4 w-4" />
+                                        <AlertTitle>Analysis Failed</AlertTitle>
+                                        <AlertDescription>{generateError}</AlertDescription>
+                                    </Alert>
+                                )}
+
+                                <div className="flex flex-col items-center gap-3 w-full">
+                                    <Button
+                                        onClick={handleAnalyze}
+                                        disabled={isAnalyzing || !canGenerateAnalysis}
+                                        size="lg"
+                                        className="h-14 px-8 text-base font-bold bg-white text-purple-600 hover:bg-purple-50 hover:scale-105 transition-all duration-300 shadow-[0_0_40px_-10px_rgba(255,255,255,0.5)] rounded-full border-4 border-white/20 bg-clip-padding"
+                                    >
+                                        {isAnalyzing ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                                                Analyzing Profile...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles className="mr-2 h-5 w-5" />
+                                                Generate Full Analysis
+                                            </>
+                                        )}
+                                    </Button>
+                                    <p className="text-xs font-medium text-purple-200/80 flex items-center gap-2">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"/>
+                                        Powered by AI • Takes ~30 seconds
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {/* Decorative background elements */}
+                            <div className="absolute top-0 left-0 -translate-x-1/4 -translate-y-1/4 w-96 h-96 bg-purple-500/30 rounded-full blur-3xl mix-blend-overlay" />
+                            <div className="absolute bottom-0 right-0 translate-x-1/4 translate-y-1/4 w-96 h-96 bg-indigo-500/30 rounded-full blur-3xl mix-blend-overlay" />
                         </div>
 
-                        {/* Right Column - CV Overview Sidebar */}
-                        <div className="space-y-4">
-                            {/* Profile Summary */}
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                        <User className="h-4 w-4" />
-                                        Profile
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="text-sm space-y-2">
-                                    {extractedInfo.seniorityLevel && (
-                                        <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Level</span>
-                                            <span className="font-medium">{extractedInfo.seniorityLevel}</span>
+                        {/* CV Overview Section */}
+                        <div className="space-y-6">
+                            <div className="flex items-center justify-between px-1">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-3">
+                                        <h3 className="text-2xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                            <User className="h-6 w-6 text-purple-600" />
+                                            Extracted Profile Data
+                                        </h3>
+                                        <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-purple-200 dark:border-purple-800">
+                                            AI Extracted
+                                        </Badge>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground max-w-2xl">
+                                        Review and correct any errors before generating your analysis. This data was automatically extracted from <span className="font-medium">{filename || 'your CV'}</span>.
+                                    </p>
+                                </div>
+                                <Button onClick={() => setIsEditorOpen(true)} className="gap-2 shadow-sm">
+                                    <Edit className="h-4 w-4" />
+                                    Edit Profile
+                                </Button>
+                            </div>
+
+                            {/* Profile Header Card */}
+                            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                                <CardContent className="p-6">
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-3">
+                                                <h4 className="text-lg font-semibold">{extractedInfo.name || "Candidate"}</h4>
+                                                {extractedInfo.seniorityLevel && (
+                                                    <Badge variant="outline" className="capitalize">{extractedInfo.seniorityLevel}</Badge>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
+                                                {extractedInfo.yearsOfExperience !== undefined && (
+                                                    <span className="flex items-center gap-1.5">
+                                                        <Briefcase className="h-4 w-4" />
+                                                        {extractedInfo.yearsOfExperience} years exp.
+                                                    </span>
+                                                )}
+                                                {hasContactObj && (contactInfo as any).location && (
+                                                    <span className="flex items-center gap-1.5">
+                                                        <Globe className="h-4 w-4" />
+                                                        {(contactInfo as any).location}
+                                                    </span>
+                                                )}
+                                                {hasContactObj && (contactInfo as any).email && (
+                                                    <span className="flex items-center gap-1.5">
+                                                        <span className="w-4 h-4 flex items-center justify-center font-bold">@</span>
+                                                        {(contactInfo as any).email}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
-                                    )}
-                                    {extractedInfo.yearsOfExperience && (
-                                        <div className="flex justify-between">
-                                            <span className="text-muted-foreground">Experience</span>
-                                            <span className="font-medium">{extractedInfo.yearsOfExperience} years</span>
+                                        
+                                        <div className="flex gap-3">
+                                            {hasContactObj && (contactInfo as any).linkedin && (
+                                                <Button variant="outline" size="sm" asChild>
+                                                    <a href={(contactInfo as any).linkedin} target="_blank" rel="noopener noreferrer" className="gap-2">
+                                                        <Globe className="h-4 w-4" />
+                                                        LinkedIn
+                                                    </a>
+                                                </Button>
+                                            )}
+                                            {hasContactObj && (contactInfo as any).github && (
+                                                <Button variant="outline" size="sm" asChild>
+                                                    <a href={(contactInfo as any).github} target="_blank" rel="noopener noreferrer" className="gap-2">
+                                                        <FolderOpen className="h-4 w-4" />
+                                                        GitHub
+                                                    </a>
+                                                </Button>
+                                            )}
                                         </div>
-                                    )}
-                                    {hasContactObj && (contactInfo as any).linkedin && (
-                                        <a 
-                                            href={(contactInfo as any).linkedin} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 hover:underline block truncate"
-                                        >
-                                            LinkedIn Profile
-                                        </a>
-                                    )}
-                                    {hasContactObj && (contactInfo as any).github && (
-                                        <a 
-                                            href={(contactInfo as any).github} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 hover:underline block truncate"
-                                        >
-                                            GitHub Profile
-                                        </a>
-                                    )}
+                                    </div>
                                 </CardContent>
                             </Card>
 
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 [&>*:last-child:nth-child(odd)]:md:col-span-2">
                             {/* Skills */}
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                        <Award className="h-4 w-4" />
+                            <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                    <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                        <Award className="h-4 w-4 text-purple-500" />
                                         Skills
-                                        <Badge variant="secondary" className="ml-auto">{extractedInfo.skills?.length || 0}</Badge>
+                                        <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.skills?.length || 0}</Badge>
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent>
-                                    <div className="flex flex-wrap gap-1">
+                                <CardContent className="pt-4">
+                                    <div className="flex flex-wrap gap-1.5">
                                         {extractedInfo.skills?.slice(0, 12).map((skill, i) => (
-                                            <Badge key={i} variant="outline" className="text-xs">{skill}</Badge>
+                                            <Badge key={i} variant="secondary" className="text-xs font-normal bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700">{skill}</Badge>
                                         ))}
                                         {(extractedInfo.skills?.length || 0) > 12 && (
-                                            <Badge variant="secondary" className="text-xs">
+                                            <Badge variant="outline" className="text-xs border-dashed">
                                                 +{extractedInfo.skills!.length - 12} more
                                             </Badge>
                                         )}
@@ -358,24 +381,24 @@ export default function AnalysisPage() {
                             </Card>
 
                             {/* Experience */}
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                        <Briefcase className="h-4 w-4" />
+                            <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                    <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                        <Briefcase className="h-4 w-4 text-purple-500" />
                                         Experience
-                                        <Badge variant="secondary" className="ml-auto">{extractedInfo.experience?.length || 0}</Badge>
+                                        <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.experience?.length || 0}</Badge>
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-3">
+                                <CardContent className="space-y-4 pt-4">
                                     {extractedInfo.experience?.slice(0, 3).map((exp, i) => (
-                                        <div key={i} className="text-sm">
-                                            <div className="font-medium truncate">{exp.role}</div>
+                                        <div key={i} className="text-sm group">
+                                            <div className="font-medium truncate group-hover:text-purple-600 transition-colors">{exp.role}</div>
                                             <div className="text-muted-foreground text-xs truncate">{exp.company}</div>
-                                            <div className="text-muted-foreground text-xs">{exp.duration}</div>
+                                            <div className="text-muted-foreground text-xs mt-0.5">{exp.duration}</div>
                                         </div>
                                     ))}
                                     {(extractedInfo.experience?.length || 0) > 3 && (
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="text-xs text-muted-foreground pt-2 border-t border-slate-100 dark:border-slate-800">
                                             +{extractedInfo.experience!.length - 3} more roles
                                         </p>
                                     )}
@@ -383,20 +406,20 @@ export default function AnalysisPage() {
                             </Card>
 
                             {/* Education */}
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                        <GraduationCap className="h-4 w-4" />
+                            <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                    <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                        <GraduationCap className="h-4 w-4 text-purple-500" />
                                         Education
-                                        <Badge variant="secondary" className="ml-auto">{extractedInfo.education?.length || 0}</Badge>
+                                        <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.education?.length || 0}</Badge>
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-3">
+                                <CardContent className="space-y-4 pt-4">
                                     {extractedInfo.education?.slice(0, 2).map((edu, i) => (
-                                        <div key={i} className="text-sm">
-                                            <div className="font-medium truncate">{edu.degree}</div>
+                                        <div key={i} className="text-sm group">
+                                            <div className="font-medium truncate group-hover:text-purple-600 transition-colors">{edu.degree}</div>
                                             <div className="text-muted-foreground text-xs truncate">{edu.institution}</div>
-                                            <div className="text-muted-foreground text-xs">{edu.year}</div>
+                                            <div className="text-muted-foreground text-xs mt-0.5">{edu.year}</div>
                                         </div>
                                     ))}
                                 </CardContent>
@@ -404,22 +427,22 @@ export default function AnalysisPage() {
 
                             {/* Projects (if any) */}
                             {extractedInfo.projects && extractedInfo.projects.length > 0 && (
-                                <Card>
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                            <FolderOpen className="h-4 w-4" />
+                                <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                    <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                            <FolderOpen className="h-4 w-4 text-purple-500" />
                                             Projects
-                                            <Badge variant="secondary" className="ml-auto">{extractedInfo.projects.length}</Badge>
+                                            <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.projects.length}</Badge>
                                         </CardTitle>
                                     </CardHeader>
-                                    <CardContent className="space-y-2">
+                                    <CardContent className="space-y-3 pt-4">
                                         {extractedInfo.projects.slice(0, 3).map((proj, i) => (
                                             <div key={i} className="text-sm">
                                                 <div className="font-medium truncate">{proj.name}</div>
                                                 {proj.technologies && proj.technologies.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                    <div className="flex flex-wrap gap-1 mt-1.5">
                                                         {proj.technologies.slice(0, 3).map((tech, j) => (
-                                                            <span key={j} className="text-[10px] bg-muted px-1.5 py-0.5 rounded">{tech}</span>
+                                                            <span key={j} className="text-[10px] bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-400">{tech}</span>
                                                         ))}
                                                     </div>
                                                 )}
@@ -429,24 +452,46 @@ export default function AnalysisPage() {
                                 </Card>
                             )}
 
+                            {/* Leadership (if any) */}
+                            {extractedInfo.leadership && extractedInfo.leadership.length > 0 && (
+                                <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                    <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                            <Award className="h-4 w-4 text-purple-500" />
+                                            Leadership
+                                            <Badge variant="secondary" className="ml-auto bg-slate-100 dark:bg-slate-800">{extractedInfo.leadership.length}</Badge>
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3 pt-4">
+                                        {extractedInfo.leadership.slice(0, 3).map((lead, i) => (
+                                            <div key={i} className="text-sm">
+                                                <div className="font-medium truncate">{lead.role}</div>
+                                                <div className="text-muted-foreground text-xs truncate">{lead.organization}</div>
+                                            </div>
+                                        ))}
+                                    </CardContent>
+                                </Card>
+                            )}
+
                             {/* Languages (if any) */}
                             {extractedInfo.languages && extractedInfo.languages.length > 0 && (
-                                <Card>
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                            <Globe className="h-4 w-4" />
+                                <Card className="h-full border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
+                                    <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                                        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                            <Globe className="h-4 w-4 text-purple-500" />
                                             Languages
                                         </CardTitle>
                                     </CardHeader>
-                                    <CardContent>
-                                        <div className="flex flex-wrap gap-1">
+                                    <CardContent className="pt-4">
+                                        <div className="flex flex-wrap gap-1.5">
                                             {extractedInfo.languages.map((lang, i) => (
-                                                <Badge key={i} variant="outline" className="text-xs">{lang}</Badge>
+                                                <Badge key={i} variant="outline" className="text-xs font-normal">{lang}</Badge>
                                             ))}
                                         </div>
                                     </CardContent>
                                 </Card>
                             )}
+                        </div>
                         </div>
                     </div>
                 )}

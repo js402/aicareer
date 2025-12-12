@@ -28,6 +28,16 @@ export function useFetch<T = any>(
     const [isLoading, setIsLoading] = useState(!options.skip)
     const [error, setError] = useState<Error | null>(null)
     const abortControllerRef = useRef<AbortController | null>(null)
+    
+    // Use refs for callbacks to avoid infinite re-render loops
+    const onSuccessRef = useRef(options.onSuccess)
+    const onErrorRef = useRef(options.onError)
+    
+    // Keep refs in sync with latest callbacks
+    useEffect(() => {
+        onSuccessRef.current = options.onSuccess
+        onErrorRef.current = options.onError
+    })
 
     const fetchData = useCallback(async () => {
         if (options.skip) return
@@ -47,18 +57,18 @@ export function useFetch<T = any>(
 
             const result: T = await response.json()
             setData(result)
-            options.onSuccess?.(result)
+            onSuccessRef.current?.(result)
         } catch (err) {
             if (err instanceof Error && err.name === 'AbortError') {
                 return // Ignore aborted requests
             }
             const error = err instanceof Error ? err : new Error(String(err))
             setError(error)
-            options.onError?.(error)
+            onErrorRef.current?.(error)
         } finally {
             setIsLoading(false)
         }
-    }, [url, options.skip, options.onSuccess, options.onError])
+    }, [url, options.skip])
 
     useEffect(() => {
         fetchData()

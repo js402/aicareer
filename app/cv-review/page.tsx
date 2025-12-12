@@ -129,10 +129,10 @@ export default function CVReviewPage() {
                     </Card>
 
                     {/* CV Content Tabs */}
-                    <Card className="lg:col-span-2">
-                        <CardHeader className="border-b">
-                            <Tabs defaultValue="preview" className="w-full">
-                                <TabsList className="grid w-full grid-cols-2">
+                    <Card className="lg:col-span-2 flex flex-col overflow-hidden border-slate-200 dark:border-slate-800 shadow-sm">
+                        <Tabs defaultValue="preview" className="flex-1 flex flex-col">
+                            <div className="border-b border-slate-200 dark:border-slate-800 px-6 py-4 bg-slate-50/50 dark:bg-slate-900/50">
+                                <TabsList className="grid w-full max-w-[400px] grid-cols-2">
                                     <TabsTrigger value="preview" className="gap-2">
                                         <Eye className="h-4 w-4" />
                                         Preview
@@ -142,24 +142,28 @@ export default function CVReviewPage() {
                                         Raw Text
                                     </TabsTrigger>
                                 </TabsList>
+                            </div>
 
-                                <TabsContent value="preview" className="mt-4">
-                                    <div className="prose dark:prose-invert max-w-none">
-                                        <pre className="whitespace-pre-wrap break-words font-mono text-sm bg-slate-100 dark:bg-slate-900 p-4 rounded-lg overflow-auto max-h-[500px]">
+                            <CardContent className="flex-1 p-0 min-h-[600px] relative bg-white dark:bg-slate-950">
+                                <TabsContent value="preview" className="absolute inset-0 m-0 h-full w-full">
+                                    <div className="h-full w-full overflow-auto p-8">
+                                        <div className="prose dark:prose-invert max-w-none">
+                                            <div className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+                                                {cvContent}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </TabsContent>
+
+                                <TabsContent value="raw" className="absolute inset-0 m-0 h-full w-full">
+                                    <div className="h-full w-full overflow-auto p-8 bg-slate-50 dark:bg-slate-900/50">
+                                        <pre className="whitespace-pre-wrap break-words font-mono text-xs text-slate-600 dark:text-slate-400">
                                             {cvContent}
                                         </pre>
                                     </div>
                                 </TabsContent>
-
-                                <TabsContent value="raw" className="mt-4">
-                                    <div className="bg-slate-100 dark:bg-slate-900 p-4 rounded-lg overflow-auto max-h-[500px]">
-                                        <pre className="whitespace-pre-wrap break-words font-mono text-xs text-slate-700 dark:text-slate-300">
-                                            {cvContent}
-                                        </pre>
-                                    </div>
-                                </TabsContent>
-                            </Tabs>
-                        </CardHeader>
+                            </CardContent>
+                        </Tabs>
                     </Card>
                 </div>
 

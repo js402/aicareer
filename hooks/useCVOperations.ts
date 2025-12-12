@@ -60,15 +60,15 @@ export function useCVOperations() {
     [setExtractedInfo, loadingState]
   )
 
-  // Analyze CV
+  // Analyze CV - accepts either raw content or extracted info
   const analyzeCV = useCallback(
-    async (cvContent: string) => {
+    async (cvContent?: string, extractedInfo?: ExtractedCVInfo) => {
       return loadingState.execute<AnalyzeCVResponse>(
         async () => {
           const response = await fetch('/api/analyze-cv', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cvContent })
+            body: JSON.stringify({ cvContent, extractedInfo })
           })
 
           if (!response.ok) {

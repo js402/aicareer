@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -10,11 +10,19 @@ interface UseAuthGuardOptions {
     cvContent?: string
 }
 
-export function useAuthGuard({ redirectTo = 'analysis', requireCV = false, cvContent }: UseAuthGuardOptions = {}) {
+interface UseAuthGuardResult {
+    isLoading: boolean
+    isAuthenticated: boolean
+}
+
+export function useAuthGuard({ redirectTo = 'analysis', requireCV = false, cvContent }: UseAuthGuardOptions = {}): UseAuthGuardResult {
     const router = useRouter()
+    const [isLoading, setIsLoading] = useState(true)
+    const [isAuthenticated, setIsAuthenticated] = useState(false)
 
     useEffect(() => {
         const checkAuth = async () => {
+            setIsLoading(true)
             try {
                 const { data: { session } } = await supabase.auth.getSession()
 
@@ -38,12 +46,18 @@ export function useAuthGuard({ redirectTo = 'analysis', requireCV = false, cvCon
                         return
                     }
                 }
+
+                setIsAuthenticated(true)
             } catch (error) {
                 console.error('Auth guard error:', error)
                 router.push('/auth')
+            } finally {
+                setIsLoading(false)
             }
         }
 
         checkAuth()
     }, [router, redirectTo, requireCV, cvContent])
+
+    return { isLoading, isAuthenticated }
 }

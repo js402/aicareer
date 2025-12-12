@@ -65,7 +65,7 @@ interface Position {
 
 export default function PositionDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = React.use(params)
-    useAuthGuard({ redirectTo: `positions/${id}` })
+    const { isLoading: authLoading, isAuthenticated } = useAuthGuard({ redirectTo: `positions/${id}` })
     const router = useRouter()
     const { content: cvContent } = useCVStore()
 
@@ -79,10 +79,11 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     // Delete Confirmation Dialog State
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
-    // Fetch position
-    const { data: position, isLoading, refetch } = useFetch<Position>(
+    // Fetch position - skip while auth is loading (redirect will happen if not authenticated)
+    const { data: position, isLoading: positionLoading, error: fetchError, refetch } = useFetch<Position>(
         `/api/job-positions/${id}`,
         {
+            skip: authLoading,
             onSuccess: (data) => setNotes(data.notes || '')
         }
     )
@@ -97,6 +98,39 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
         `/api/job-positions/${id}`,
         'PATCH'
     )
+
+    // Mutation for delete
+    const { mutate: deletePosition, isLoading: isDeleting } = useMutation<{}, void>(
+        `/api/job-positions/${id}`,
+        'DELETE' as any
+    )
+
+    // Mutation for generating tailored CV
+    const { mutate: tailorCV, isLoading: isTailoring } = useMutation<any, { tailoredCV: string }>(
+        '/api/tailor-cv',
+        'POST'
+    )
+
+    // Mutation for saving tailored CV
+    const { mutate: saveTailoredCV } = useMutation<any, any>(
+        '/api/tailored-cvs',
+        'POST'
+    )
+
+    // Mutation for marking CV as submitted
+    const { mutate: markSubmitted } = useMutation<any, Position>(
+        `/api/job-positions/${id}`,
+        'PATCH'
+    )
+
+    // Helper to fetch tailored CV content
+    const fetchTailoredCVContent = async (cvId: string): Promise<TailoredCV | null> => {
+        const response = await fetch(`/api/tailored-cvs/${cvId}`)
+        if (response.ok) {
+            return response.json()
+        }
+        return null
+    }
 
     const handleStatusChange = useCallback(async (newStatus: string) => {
         if (!position) return
@@ -127,17 +161,8 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
 
     const handleDeleteConfirm = async () => {
         try {
-            const response = await fetch(`/api/job-positions/${id}`, {
-                method: 'DELETE'
-            })
-
-            if (response.ok) {
-                router.push('/positions')
-            } else {
-                const data = await response.json()
-                console.error('Failed to delete position:', data)
-                alert('Failed to delete position: ' + (data.error || 'Unknown error'))
-            }
+            await deletePosition({})
+            router.push('/positions')
         } catch (error) {
             console.error('Error deleting position:', error)
             alert('An error occurred while deleting the position.')
@@ -154,39 +179,25 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
             setIsGenerating(true)
 
             // 1. Generate tailored content
-            const tailorRes = await fetch('/api/tailor-cv', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    cvContent,
-                    jobDescription: position.job_description,
-                    matchAnalysis: {
-                        matchScore: position.match_score,
-                        matchingSkills: position.matching_skills,
-                        missingSkills: position.missing_skills,
-                        recommendations: position.recommendations
-                    }
-                })
+            const tailorResult = await tailorCV({
+                cvContent,
+                jobDescription: position.job_description,
+                matchAnalysis: {
+                    matchScore: position.match_score,
+                    matchingSkills: position.matching_skills,
+                    missingSkills: position.missing_skills,
+                    recommendations: position.recommendations
+                }
             })
-
-            if (!tailorRes.ok) throw new Error('Failed to generate tailored CV')
-            const { tailoredCV } = await tailorRes.json()
 
             // 2. Save tailored CV
-            const saveRes = await fetch('/api/tailored-cvs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    job_position_id: position.id,
-                    cv_content: cvContent,
-                    tailored_content: tailoredCV
-                })
+            await saveTailoredCV({
+                job_position_id: position.id,
+                cv_content: cvContent,
+                tailored_content: tailorResult.tailoredCV
             })
 
-            if (!saveRes.ok) throw new Error('Failed to save tailored CV')
-            const savedCV = await saveRes.json()
             await refetch()
-
         } catch (error) {
             console.error('Error generating tailored CV:', error)
             alert('Failed to generate tailored CV. Please try again.')
@@ -197,10 +208,8 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
 
     const handleDownloadCV = async (cvId: string, version: number) => {
         try {
-            const response = await fetch(`/api/tailored-cvs/${cvId}`)
-            if (response.ok) {
-                const data = await response.json()
-
+            const data = await fetchTailoredCVContent(cvId)
+            if (data?.tailored_content) {
                 // Sanitize filename
                 const safeCompanyName = position?.company_name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'company'
                 const safePositionTitle = position?.position_title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'position'
@@ -219,11 +228,9 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
             // If content is not loaded, fetch it
             let content = cv.tailored_content
             if (!content) {
-                const response = await fetch(`/api/tailored-cvs/${cv.id}`)
-                if (response.ok) {
-                    const data = await response.json()
-                    content = data.tailored_content
-                }
+                const data = await fetchTailoredCVContent(cv.id)
+                content = data?.tailored_content
+
             }
 
             if (content) {
@@ -239,24 +246,44 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
         if (!position) return
 
         try {
-            const response = await fetch(`/api/job-positions/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ submitted_cv_id: cvId, status: 'applied', applied_date: new Date().toISOString() })
+            await markSubmitted({ 
+                submitted_cv_id: cvId, 
+                status: 'applied', 
+                applied_date: new Date().toISOString() 
             })
-
-            if (response.ok) {
-                await refetch()
-            }
+            await refetch()
         } catch (error) {
             console.error('Error marking CV as submitted:', error)
         }
     }
 
+    // Combined loading state
+    const isLoading = authLoading || positionLoading
+
     if (isLoading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+        )
+    }
+
+    if (fetchError) {
+        return (
+            <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+                <Navbar />
+                <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
+                    <div className="text-center py-12">
+                        <h2 className="text-xl font-semibold text-red-600 mb-2">Failed to load position</h2>
+                        <p className="text-muted-foreground mb-4">{fetchError.message}</p>
+                        <button 
+                            onClick={() => router.push('/positions')}
+                            className="text-blue-600 hover:underline"
+                        >
+                            ← Back to positions
+                        </button>
+                    </div>
+                </main>
             </div>
         )
     }

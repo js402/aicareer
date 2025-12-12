@@ -131,12 +131,15 @@ export default function CVMetadataPage() {
             // Populate store and navigate
             clear()
             setCV(data.cvContent, data.filename || 'Stored CV')
+            setExtractedInfo(item.extracted_info)
+            
+            // If analysis exists, go directly to report page
             if (data.analysis) {
                 setAnalysis(data.analysis)
+                router.push('/analysis/report')
+            } else {
+                router.push('/analysis')
             }
-            setExtractedInfo(item.extracted_info)
-
-            router.push('/analysis')
 
         } catch (error) {
             console.error('Failed to load analysis:', error)
@@ -154,32 +157,33 @@ export default function CVMetadataPage() {
         <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
             <Navbar />
 
-            <main className="flex-1 container mx-auto px-4 py-8 max-w-7xl">
+            <main className="flex-1 container mx-auto px-4 py-8 max-w-6xl">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center gap-4">
-                        <Button
-                            variant="ghost"
-                            onClick={() => router.push('/')}
-                            className="gap-2"
-                        >
-                            <ArrowLeft className="h-4 w-4" />
-                            Back to Home
-                        </Button>
+                <div className="mb-10">
+                    <Button
+                        variant="ghost"
+                        onClick={() => router.push('/')}
+                        className="gap-2 mb-6 -ml-2 text-muted-foreground hover:text-foreground"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Home
+                    </Button>
+                    
+                    <div className="flex items-start justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold">CV Metadata Management</h1>
-                            <p className="text-muted-foreground mt-1">
-                                Manage and edit your extracted CV information
+                            <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-100">My CVs</h1>
+                            <p className="text-muted-foreground mt-2 text-base">
+                                Manage your uploaded CVs and view AI-powered career insights
                             </p>
                         </div>
-                    </div>
 
-                    {hasProAccess && (
-                        <Button onClick={() => router.push('/')} className="gap-2">
-                            <Plus className="h-4 w-4" />
-                            Upload New CV
-                        </Button>
-                    )}
+                        {hasProAccess && (
+                            <Button onClick={() => router.push('/')} className="gap-2 bg-purple-600 hover:bg-purple-700">
+                                <Plus className="h-4 w-4" />
+                                Upload New CV
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Success Message */}
@@ -201,14 +205,6 @@ export default function CVMetadataPage() {
                         className="mb-6"
                     />
                 )}
-
-                {/* Individual CV Metadata Section */}
-                <div className="mb-4">
-                    <h2 className="text-2xl font-bold">Your CV Uploads</h2>
-                    <p className="text-muted-foreground text-sm mt-1">
-                        Manage your uploaded CV files and their extracted metadata
-                    </p>
-                </div>
 
                 {/* Metadata List */}
                 {metadata.length === 0 ? (
@@ -238,7 +234,7 @@ export default function CVMetadataPage() {
                         </CardContent>
                     </Card>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {metadata.map((item) => (
                             <CVMetadataCard
                                 key={item.id}

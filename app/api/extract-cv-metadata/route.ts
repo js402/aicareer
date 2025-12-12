@@ -66,7 +66,6 @@ export const POST = withAuth(async (request, { supabase, user }) => {
             return NextResponse.json(
                 {
                     message: 'CV is incomplete',
-                    questions: validation.missingInfoQuestions || ['Please provide more details about your experience.'],
                     extractedInfo: validation.extractedInfo,
                     status: 'incomplete'
                 },

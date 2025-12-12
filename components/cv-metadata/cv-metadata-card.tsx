@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Edit, Trash2, FileText, User, Briefcase, GraduationCap, Award, Calendar, BarChart3, Sparkles, Loader2 } from "lucide-react"
+import { Edit, Trash2, FileText, User, Briefcase, GraduationCap, Award, Calendar, Sparkles, Loader2 } from "lucide-react"
 import type { CVMetadataResponse } from "@/lib/api-client"
 import { useState } from "react"
 
@@ -49,90 +49,101 @@ export function CVMetadataCard({
     return contact?.email || contact?.phone || contact?.location || 'Not available'
   }
 
+  const extractedInfo = item.extracted_info
+  const seniorityLevel = extractedInfo.seniorityLevel || 'professional'
+  const yearsExp = extractedInfo.yearsOfExperience
+
   return (
-    <Card className="hover:shadow-lg transition-shadow">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3 flex-1">
-            <div className="p-2 rounded-lg bg-blue-500/10 dark:bg-blue-500/20">
-              <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <CardTitle className="text-lg line-clamp-1">
-                {item.extracted_info.name || 'Unnamed CV'}
-              </CardTitle>
-              <div className="flex items-center gap-2 mt-1">
-                <Badge className={getStatusColor(item.extraction_status)}>
-                  {item.extraction_status}
+    <Card className="group relative overflow-hidden border-slate-200 dark:border-slate-800 hover:border-purple-300 dark:hover:border-purple-800 transition-all duration-300 hover:shadow-lg">
+      {/* Top accent bar */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-indigo-500" />
+      
+      <CardContent className="p-6 pt-8">
+        {/* Header */}
+        <div className="flex items-start gap-4 mb-6">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30">
+            <FileText className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100 truncate">
+              {extractedInfo.name || 'Unnamed CV'}
+            </h3>
+            <div className="flex items-center gap-2 mt-1.5">
+              <Badge className={`${getStatusColor(item.extraction_status)} text-xs font-medium`}>
+                {item.extraction_status}
+              </Badge>
+              {seniorityLevel && (
+                <Badge variant="outline" className="text-xs capitalize">
+                  {seniorityLevel}
                 </Badge>
-                {item.confidence_score && (
-                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <BarChart3 className="h-3 w-3" />
-                    {(item.confidence_score * 100).toFixed(0)}%
-                  </div>
-                )}
-              </div>
-              <div className="mt-2">
-                <input
-                  className="border rounded px-2 py-1 text-xs bg-white dark:bg-slate-900 w-full"
-                  placeholder="Name this CV"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  onBlur={handleRename}
-                  onKeyDown={(e) => e.key === 'Enter' && handleRename()}
-                />
-              </div>
+              )}
+              {yearsExp !== undefined && (
+                <span className="text-xs text-muted-foreground">
+                  {yearsExp}+ years
+                </span>
+              )}
             </div>
           </div>
         </div>
-      </CardHeader>
 
-      <CardContent className="space-y-4">
-        {/* Personal Info */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Contact:</span>
-            <span className="text-muted-foreground truncate">
-              {getContactDisplay()}
-            </span>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Award className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wide">Skills</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              {extractedInfo.skills?.length || 0}
+            </p>
           </div>
-
-          <div className="flex items-center gap-2 text-sm">
-            <Award className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Skills:</span>
-            <span className="text-muted-foreground">
-              {item.extracted_info.skills.length} skills
-            </span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Briefcase className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wide">Experience</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              {extractedInfo.experience?.length || 0}
+            </p>
           </div>
-
-          <div className="flex items-center gap-2 text-sm">
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Experience:</span>
-            <span className="text-muted-foreground">
-              {item.extracted_info.experience.length} roles
-            </span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <GraduationCap className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wide">Education</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              {extractedInfo.education?.length || 0}
+            </p>
           </div>
-
-          <div className="flex items-center gap-2 text-sm">
-            <GraduationCap className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Education:</span>
-            <span className="text-muted-foreground">
-              {item.extracted_info.education.length} degrees
-            </span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Award className="h-4 w-4" />
+              <span className="text-xs font-medium uppercase tracking-wide">Projects</span>
+            </div>
+            <p className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              {extractedInfo.projects?.length || 0}
+            </p>
           </div>
         </div>
 
-        {/* Created Date */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
-          <Calendar className="h-3 w-3" />
-          <span>Created {new Date(item.created_at).toLocaleDateString()}</span>
+        {/* Contact */}
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+          <User className="h-4 w-4 flex-shrink-0" />
+          <span className="truncate">{getContactDisplay()}</span>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground mb-6">
+          <div className="flex items-center gap-1.5">
+            <Calendar className="h-3 w-3" />
+            <span>Added {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+          </div>
         </div>
 
         {/* Actions */}
-        <div className="space-y-2 pt-2">
+        <div className="space-y-3">
           <Button
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+            className="w-full h-11 bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all"
             onClick={() => onLoadAnalysis(item)}
             disabled={isLoadingAnalysis}
           >
@@ -149,12 +160,11 @@ export function CVMetadataCard({
             )}
           </Button>
 
-          <div className="flex gap-2">
+          <div className="flex gap-3">
             <Button
               variant="outline"
-              size="sm"
               onClick={() => onEdit(item)}
-              className="flex-1"
+              className="flex-1 h-10"
             >
               <Edit className="h-4 w-4 mr-2" />
               Edit
@@ -164,8 +174,7 @@ export function CVMetadataCard({
               <AlertDialogTrigger asChild>
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                  className="flex-1 h-10 text-red-600 hover:text-red-700 border-red-200 hover:border-red-300 hover:bg-red-50 dark:border-red-900 dark:hover:border-red-800 dark:hover:bg-red-950"
                   disabled={isDeleting}
                 >
                   {isDeleting ? (
@@ -178,9 +187,9 @@ export function CVMetadataCard({
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete CV Metadata</AlertDialogTitle>
+                  <AlertDialogTitle>Delete CV</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Are you sure you want to delete this CV metadata? This action cannot be undone.
+                    Are you sure you want to delete this CV? This action cannot be undone and all associated analysis data will be lost.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

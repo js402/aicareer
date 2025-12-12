@@ -11,7 +11,7 @@ An intelligent career guidance platform that analyzes CVs, matches job opportuni
 ## 🌟 Key Features
 
 ### 🤖 AI-Powered CV Analysis
-- **Comprehensive Analysis**: GPT-4 powered evaluation of skills, experience, and career trajectory
+- **Comprehensive Analysis**: AI powered evaluation of skills, experience, and career trajectory
 - **Structured Insights**: Detailed breakdown of strengths, areas for improvement, and recommendations
 - **Industry Matching**: Tailored advice for specific roles and companies
 

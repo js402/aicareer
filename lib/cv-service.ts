@@ -59,7 +59,7 @@ export interface ValidationResult {
 const INPUT_VALIDATION_PROMPT = `You are an expert CV/Resume parser and validator. Your job is to:
 1. Determine if the input is a valid CV/Resume or professional profile.
 2. If it is NOT a CV (e.g., random text, code, a poem, a recipe), mark it as INVALID.
-3. If it IS a CV but has significant gaps, mark it as INCOMPLETE and generate specific questions.
+3. If it IS a CV but has significant gaps, mark it as INCOMPLETE.
 4. If it is a complete and valid CV, mark it as VALID and extract ALL information comprehensively.
 
 IMPORTANT - FORMAT FLEXIBILITY:
@@ -70,11 +70,38 @@ IMPORTANT - FORMAT FLEXIBILITY:
 
 ${getExtractionPromptFragment()}
 
+LANGUAGE NORMALIZATION:
+- If the CV is not in English, translate all narrative and label content to clear, professional English.
+- Preserve proper nouns and terms where translation is not appropriate (company names, product names, certifications, course titles, tool/library names).
+- Normalize role titles to common English equivalents when safe (e.g., "Ingeniero de Software" -> "Software Engineer").
+- Keep contact info values intact; do not translate email addresses or URLs.
+- Ensure language names use English (e.g., "Deutsch" -> "German").
+
+LIGHT UPLIFT EDITS (non-invasive):
+- Correct spelling and grammar; fix minor formatting only.
+- Prefer active voice; avoid personal pronouns (no "I" or "We").
+- Be specific rather than general; articulate, not flowery.
+- Do not fabricate facts or numbers; only quantify when present.
+- Avoid slang, colloquialisms, and unexplained abbreviations.
+- Make content easy to scan (concise bullets, clear labels) without restructuring sections.
+- Preserve original structure and order; use reverse chronological ordering when obvious.
+- Do not add personal details (photo, age, gender) or references.
+
+CONSERVATIVE INFERENCE (fill missing categories when highly supported):
+- It is acceptable to populate empty/omitted categories if there is strong evidence in the CV.
+- Leadership:
+  - If a project/role clearly implies leadership (e.g., "led", "owned", "managed", "mentored", "stakeholders", "cross-functional", "project lead", "team lead"), add a leadership entry.
+  - Use the most directly supported details from the source text (role, organization, scope).
+  - Set duration ONLY if it is explicitly stated or can be safely derived from an associated experience/project duration; otherwise do NOT create the entry.
+  - Add 1-3 concise highlights only when supported; do not invent metrics.
+- Industries / Primary Functions / Inferred Skills:
+  - Prefer inferring these from repeated, concrete evidence (domain terms, responsibilities, tools), not from a single vague mention.
+- Never fabricate facts, titles, company names, numbers, dates, or responsibilities. If unsure, leave the field empty rather than guessing.
+
 Return a JSON object with:
 {
   "status": "valid" | "incomplete" | "invalid",
   "formatType": "bullet" | "paragraph" | "mixed",
-  "missingInfoQuestions": string[], // If incomplete, list 3-5 specific questions
   "rejectionReason": string, // If invalid, explain why
   "extractedInfo": {
     "name": string,

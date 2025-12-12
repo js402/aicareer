@@ -9,8 +9,26 @@ export const nonEmptyString = z.string().min(1, 'Field cannot be empty')
 
 // CV Analysis schemas
 export const analyzeCVSchema = z.object({
-  cvContent: z.string().min(10, 'CV content must be at least 10 characters').max(50000, 'CV content is too large')
-})
+  cvContent: z.string().min(10, 'CV content must be at least 10 characters').max(50000, 'CV content is too large').optional(),
+  extractedInfo: z.object({
+    name: z.string().optional(),
+    contactInfo: z.any().optional(),
+    summary: z.string().optional(),
+    experience: z.array(z.any()).optional(),
+    skills: z.array(z.string()).optional(),
+    inferredSkills: z.array(z.string()).optional(),
+    education: z.array(z.any()).optional(),
+    certifications: z.array(z.any()).optional(),
+    projects: z.array(z.any()).optional(),
+    languages: z.array(z.any()).optional(),
+    leadership: z.array(z.any()).optional(),
+    seniorityLevel: z.string().optional(),
+    yearsOfExperience: z.number().optional(),
+  }).optional(),
+}).refine(
+  (data) => data.cvContent || data.extractedInfo,
+  { message: 'Either cvContent or extractedInfo must be provided' }
+)
 
 export const extractCVMetadataSchema = z.object({
   cvContent: z.string().min(10, 'CV content must be at least 10 characters').max(50000, 'CV content is too large')

@@ -121,6 +121,15 @@ export function CVEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []) // Only on mount - intentionally ignore deps
 
+    // Reset form data when initialData changes (e.g., different CV selected)
+    useEffect(() => {
+        setFormData(initialData)
+        setHasChanges(false)
+        setSaveError(null)
+        setSaveSuccess(false)
+        setDismissedAlerts(new Set())
+    }, [initialData])
+
     // Update form data and track changes
     const updateField = useCallback(<K extends keyof ExtractedCVInfo>(
         field: K,

@@ -6,6 +6,80 @@ import { validateInput, analyzeCVSchema } from '@/lib/validation'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import { getAnalysisPromptFragment, getExtractionPromptFragment } from '@/lib/resume-guidelines'
 
+// Helper to convert extractedInfo to a text format for analysis
+function formatExtractedInfoForAnalysis(info: Record<string, unknown>): string {
+    const sections: string[] = []
+    
+    if (info.name) sections.push(`Name: ${info.name}`)
+    
+    if (info.contactInfo) {
+        const contact = info.contactInfo as Record<string, unknown>
+        const contactParts = []
+        if (contact.email) contactParts.push(`Email: ${contact.email}`)
+        if (contact.phone) contactParts.push(`Phone: ${contact.phone}`)
+        if (contact.location) contactParts.push(`Location: ${contact.location}`)
+        if (contact.linkedin) contactParts.push(`LinkedIn: ${contact.linkedin}`)
+        if (contact.github) contactParts.push(`GitHub: ${contact.github}`)
+        if (contactParts.length) sections.push(`Contact:\n${contactParts.join('\n')}`)
+    }
+    
+    if (info.summary) sections.push(`Summary:\n${info.summary}`)
+    
+    if (info.seniorityLevel) sections.push(`Seniority Level: ${info.seniorityLevel}`)
+    if (info.yearsOfExperience !== undefined) sections.push(`Years of Experience: ${info.yearsOfExperience}`)
+    
+    if (Array.isArray(info.skills) && info.skills.length) {
+        sections.push(`Skills:\n${info.skills.join(', ')}`)
+    }
+    
+    if (Array.isArray(info.experience) && info.experience.length) {
+        const expText = info.experience.map((exp: any) => {
+            const parts = [`${exp.role || exp.title} at ${exp.company}`]
+            if (exp.duration) parts.push(`(${exp.duration})`)
+            if (exp.description) parts.push(`\n  ${exp.description}`)
+            if (Array.isArray(exp.highlights)) parts.push(`\n  - ${exp.highlights.join('\n  - ')}`)
+            return parts.join(' ')
+        }).join('\n\n')
+        sections.push(`Experience:\n${expText}`)
+    }
+    
+    if (Array.isArray(info.education) && info.education.length) {
+        const eduText = info.education.map((edu: any) => {
+            return `${edu.degree} - ${edu.institution}${edu.year ? ` (${edu.year})` : ''}`
+        }).join('\n')
+        sections.push(`Education:\n${eduText}`)
+    }
+    
+    if (Array.isArray(info.certifications) && info.certifications.length) {
+        const certText = info.certifications.map((cert: any) => {
+            return typeof cert === 'string' ? cert : `${cert.name}${cert.issuer ? ` - ${cert.issuer}` : ''}`
+        }).join('\n')
+        sections.push(`Certifications:\n${certText}`)
+    }
+    
+    if (Array.isArray(info.projects) && info.projects.length) {
+        const projText = info.projects.map((proj: any) => {
+            const parts = [proj.name || proj.title]
+            if (proj.description) parts.push(`: ${proj.description}`)
+            if (Array.isArray(proj.technologies)) parts.push(` [${proj.technologies.join(', ')}]`)
+            return parts.join('')
+        }).join('\n')
+        sections.push(`Projects:\n${projText}`)
+    }
+    
+    if (Array.isArray(info.leadership) && info.leadership.length) {
+        const leadText = info.leadership.map((lead: any) => {
+            const parts = [lead.role || lead.title]
+            if (lead.scope) parts.push(`: ${lead.scope}`)
+            if (lead.impact) parts.push(` - Impact: ${lead.impact}`)
+            return parts.join('')
+        }).join('\n')
+        sections.push(`Leadership:\n${leadText}`)
+    }
+    
+    return sections.join('\n\n')
+}
+
 
 
 // Combined Validation and Analysis Prompt
@@ -18,10 +92,25 @@ const CV_ANALYSIS_PROMPT = `You are an expert CV/Resume parser and career adviso
 ${getExtractionPromptFragment()}
 ${getAnalysisPromptFragment()}
 
+Language & Output:
+- If the CV is not in English, translate extracted info and the analysis to clear, professional English.
+- Preserve proper nouns and terms where translation is not appropriate (company names, product names, certifications, course titles, tool/library names).
+- Normalize role titles to common English equivalents when safe.
+- Do not translate email addresses, URLs, or raw contact lines.
+
+Light Uplift (non-invasive):
+- Use active voice and specific language in extracted text (summary, experience descriptions, highlights) while keeping facts intact.
+- Correct minor spelling/grammar; avoid slang and personal pronouns.
+- Make content easy to scan; do not heavily rewrite or restructure.
+
+Conservative Inference (when highly supported):
+- If the CV strongly implies leadership scope (leading initiatives, stakeholders, mentoring, owning delivery), reflect that in the analysis.
+- Do not fabricate facts, metrics, titles, or dates.
+- If you infer something, ensure it is backed by explicit evidence in the CV text.
+
 Return a JSON object with:
 {
   "status": "valid" | "incomplete" | "invalid",
-  "missingInfoQuestions": string[],
   "rejectionReason": string,
   "extractedInfo": {
     "name": string,
@@ -70,9 +159,28 @@ export const POST = withAuth(async (request, { supabase, user }) => {
             )
         }
 
-        const { cvContent } = inputValidation.data
+        const { cvContent, extractedInfo } = inputValidation.data
 
-        const cvHash = await hashCV(cvContent)
+        // Determine content for analysis - prefer cvContent, fall back to extractedInfo
+        const hasRawContent = cvContent && !cvContent.match(/^\[CV content for .+\]$/)
+        
+        let contentForAnalysis: string
+        let cvHash: string
+        
+        if (hasRawContent) {
+            contentForAnalysis = cvContent!
+            cvHash = await hashCV(cvContent!)
+        } else if (extractedInfo) {
+            // Convert extractedInfo to a structured text format for analysis
+            contentForAnalysis = formatExtractedInfoForAnalysis(extractedInfo)
+            cvHash = await hashCV(contentForAnalysis)
+        } else {
+            return NextResponse.json(
+                { error: 'No CV content or extracted info provided' },
+                { status: 400 }
+            )
+        }
+
         const cachedResult = await getCachedAnalysis(supabase, user.id, cvHash)
 
         if (cachedResult) {
@@ -88,7 +196,7 @@ export const POST = withAuth(async (request, { supabase, user }) => {
         // STEP 1: Validate, extract, and generate analysis in a single call
         const messages: ChatCompletionMessageParam[] = [
             { role: 'system', content: CV_ANALYSIS_PROMPT },
-            { role: 'user', content: `Validate and analyze this CV:\n\n${cvContent}` }
+            { role: 'user', content: `Validate and analyze this CV:\n\n${contentForAnalysis}` }
         ]
 
         const completion = await openai.chat.completions.create({
@@ -116,7 +224,6 @@ export const POST = withAuth(async (request, { supabase, user }) => {
             return NextResponse.json(
                 {
                     message: 'CV is incomplete',
-                    questions: result.missingInfoQuestions || ['Please provide more details about your experience.'],
                     status: 'incomplete'
                 },
                 { status: 200 }
@@ -136,7 +243,7 @@ export const POST = withAuth(async (request, { supabase, user }) => {
         // Store analysis in cache
         try {
             const filename = `CV-${new Date().toISOString().split('T')[0]}`
-            await storeAnalysis(supabase, user.id, cvHash, cvContent, filename, result.analysis)
+            await storeAnalysis(supabase, user.id, cvHash, contentForAnalysis, filename, result.analysis)
         } catch (cacheError) {
             console.warn('Failed to cache analysis:', cacheError)
         }
