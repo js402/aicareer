@@ -11,7 +11,7 @@ export default function FeaturesPage() {
         {
             icon: Sparkles,
             title: "AI-Powered Analysis",
-            description: "Get intelligent career guidance powered by GPT-4 that analyzes your CV structure, experience, and skills."
+            description: "Get intelligent career guidance powered by advanced AI that analyzes your CV structure, experience, and skills."
         },
         {
             icon: Shield,
@@ -20,8 +20,8 @@ export default function FeaturesPage() {
         },
         {
             icon: Database,
-            title: "Smart Caching",
-            description: "Get instant results with our intelligent caching system. Same CV? Instant analysis."
+            title: "Instant Re-runs",
+            description: "Re-run analyses instantly on your saved CV — no waiting."
         },
         {
             icon: Clock,
@@ -36,7 +36,7 @@ export default function FeaturesPage() {
         {
             icon: Zap,
             title: "Lightning Fast",
-            description: "Upload your CV and get comprehensive analysis in under 30 seconds."
+            description: "Upload your CV and get comprehensive analysis in seconds."
         }
     ]
 

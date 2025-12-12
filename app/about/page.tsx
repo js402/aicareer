@@ -12,7 +12,7 @@ export default function AboutPage() {
 
             <main className="flex-1">
                 <PageHeader
-                    title="About CV Career Insights"
+                    title="About TechCareer.AI"
                     description="Empowering professionals to reach their full career potential through AI-driven CV analysis"
                 />
 
@@ -55,7 +55,7 @@ export default function AboutPage() {
                                 insights that would normally cost hundreds of dollars and take days to receive.
                             </p>
                             <p>
-                                Our platform combines cutting-edge AI technology (GPT-4) with structured prompt engineering
+                                Our platform combines cutting-edge AI with thoughtful product design
                                 to give you the guidance you need, when you need it.
                             </p>
                         </CardContent>

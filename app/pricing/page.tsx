@@ -30,9 +30,9 @@ export default function PricingPage() {
             features: [
                 "Unlimited CV analyses",
                 "AI-powered career insights",
-                "Smart caching for instant results",
+                "Instant re-analysis of saved CVs",
                 "Secure encrypted storage",
-                "Markdown-formatted analysis"
+                "Clean, readable reports"
             ],
             cta: "Get Started",
             href: "/",
@@ -208,7 +208,7 @@ export default function PricingPage() {
                                 </CardHeader>
                                 <CardContent>
                                     <p className="text-muted-foreground">
-                                        Pro subscriptions are billed monthly via Stripe. You can cancel anytime and retain access until the end of your billing period.
+                                        Pro subscriptions are billed monthly. You can cancel anytime and retain access until the end of your billing period.
                                     </p>
                                 </CardContent>
                             </Card>

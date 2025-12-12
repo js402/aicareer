@@ -36,7 +36,7 @@ export default function Home() {
                 </div>
                 <h3 className="font-semibold text-lg">AI-Powered Analysis</h3>
                 <p className="text-sm text-muted-foreground">
-                  Get personalized insights from GPT-4 analyzing your CV structure, experience, and career trajectory
+                  Get personalized insights from advanced AI analyzing your CV structure, experience, and career trajectory
                 </p>
               </CardContent>
             </Card>
