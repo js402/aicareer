@@ -205,7 +205,7 @@ describe('evaluate-job-match API', () => {
         expect(supabaseMock.from).toHaveBeenCalledWith('job_match_analyses')
         expect(supabaseMock.insert).toHaveBeenCalledWith({
             user_id: 'test-user-id',
-            cv_hash: 'mock-hash', // This will be the blueprint hash now
+            cv_hash: 'cv-hash-123', // Uses cv_hash from cv_metadata mock
             job_hash: 'mock-hash',
             match_score: 90,
             analysis_result: newResult

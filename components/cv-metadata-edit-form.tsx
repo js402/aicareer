@@ -138,7 +138,6 @@ export function CVMetadataEditForm({ metadata, onSave, onCancel }: CVMetadataEdi
 
     const updateProject = (index: number, field: string, value: any) => {
         const newProjects = [...(formData.projects || [])]
-        // @ts-ignore
         newProjects[index] = { ...newProjects[index], [field]: value }
         updateField('projects', newProjects)
     }
@@ -153,7 +152,6 @@ export function CVMetadataEditForm({ metadata, onSave, onCancel }: CVMetadataEdi
 
     const updateCertification = (index: number, field: string, value: string) => {
         const newCerts = [...(formData.certifications || [])]
-        // @ts-ignore
         newCerts[index] = { ...newCerts[index], [field]: value }
         updateField('certifications', newCerts)
     }

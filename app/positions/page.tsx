@@ -3,12 +3,15 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Navbar } from "@/components/navbar"
-import { Plus, Search, Loader2 } from "lucide-react"
+import { Plus, Search } from "lucide-react"
 import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { PositionCard } from "@/components/positions/position-card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useFetch } from "@/hooks/useFetch"
+import { useDebounce } from "@/hooks/useDebounce"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { EmptyState } from "@/components/ui/empty-state"
 import { useState, useMemo } from "react"
 
 interface Position {
@@ -30,6 +33,7 @@ export default function PositionsPage() {
 
     const [filterStatus, setFilterStatus] = useState('all')
     const [searchQuery, setSearchQuery] = useState('')
+    const debouncedSearch = useDebounce(searchQuery, 300)
     
     const { data: response, isLoading } = useFetch<PositionsResponse>(
         '/api/job-positions'
@@ -41,11 +45,11 @@ export default function PositionsPage() {
         return positions.filter(position => {
             const matchesStatus = filterStatus === 'all' || position.status === filterStatus
             const matchesSearch =
-                position.company_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                position.position_title.toLowerCase().includes(searchQuery.toLowerCase())
+                position.company_name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+                position.position_title.toLowerCase().includes(debouncedSearch.toLowerCase())
             return matchesStatus && matchesSearch
         })
-    }, [positions, filterStatus, searchQuery])
+    }, [positions, filterStatus, debouncedSearch])
 
     return (
         <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
@@ -97,7 +101,7 @@ export default function PositionsPage() {
                 {/* Content */}
                 {isLoading ? (
                     <div className="flex justify-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                        <LoadingSpinner />
                     </div>
                 ) : filteredPositions.length > 0 ? (
                     <div className="grid md:grid-cols-2 gap-6">
@@ -105,30 +109,25 @@ export default function PositionsPage() {
                             <PositionCard key={position.id} position={position} />
                         ))}
                     </div>
+                ) : searchQuery || filterStatus !== 'all' ? (
+                    <EmptyState
+                        icon={Search}
+                        title="No positions found"
+                        description="Try adjusting your filters to see more results."
+                        action={() => {
+                            setSearchQuery('')
+                            setFilterStatus('all')
+                        }}
+                        actionLabel="Clear Filters"
+                    />
                 ) : (
-                    <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                        <div className="mb-4 inline-flex p-4 rounded-full bg-slate-100 dark:bg-slate-800">
-                            <Plus className="h-8 w-8 text-slate-400" />
-                        </div>
-                        <h3 className="text-lg font-semibold mb-2">No positions found</h3>
-                        <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-                            {searchQuery || filterStatus !== 'all'
-                                ? "Try adjusting your filters to see more results."
-                                : "Start by adding a job position you're interested in."}
-                        </p>
-                        {(searchQuery || filterStatus !== 'all') ? (
-                            <Button variant="outline" onClick={() => {
-                                setSearchQuery('')
-                                setFilterStatus('all')
-                            }}>
-                                Clear Filters
-                            </Button>
-                        ) : (
-                            <Button asChild>
-                                <Link href="/analysis/job-match">Add Your First Position</Link>
-                            </Button>
-                        )}
-                    </div>
+                    <EmptyState
+                        icon={Plus}
+                        title="No positions found"
+                        description="Start by adding a job position you're interested in."
+                        actionHref="/analysis/job-match"
+                        actionLabel="Add Your First Position"
+                    />
                 )}
             </main>
         </div>

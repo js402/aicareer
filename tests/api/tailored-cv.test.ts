@@ -3,11 +3,6 @@ import { POST as tailorCV } from '@/app/api/tailor-cv/route'
 import { POST as saveTailoredCV } from '@/app/api/tailored-cvs/route'
 import { NextRequest } from 'next/server'
 
-// Mock Supabase client
-vi.mock('@/lib/supabase-server', () => ({
-    createServerSupabaseClient: vi.fn()
-}))
-
 // Mock OpenAI
 vi.mock('@/lib/openai', () => ({
     openai: {
@@ -19,51 +14,83 @@ vi.mock('@/lib/openai', () => ({
     }
 }))
 
-// Mock Subscription check
-vi.mock('@/lib/subscription', () => ({
-    hasProAccess: vi.fn()
+// Mock api-middleware with withProAccess
+vi.mock('@/lib/api-middleware', () => ({
+    withProAccess: (handler: (req: NextRequest, context: { supabase: unknown, user: { id: string } }) => Promise<Response>) => async (req: NextRequest) => {
+        const globalMock = (global as any)
+        if (globalMock.mockProAccessDenied) {
+            return new Response(JSON.stringify({ error: 'Pro subscription required' }), { status: 403 })
+        }
+        return handler(req, {
+            supabase: globalMock.mockSupabase,
+            user: { id: 'user_123' }
+        })
+    }
 }))
 
-import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { openai } from '@/lib/openai'
-import { hasProAccess } from '@/lib/subscription'
 
 const mockSession = {
     user: { id: 'user_123', email: 'test@example.com' }
 }
 
-const mockSupabase = {
+const createMockSupabase = () => ({
     auth: {
         getUser: vi.fn().mockResolvedValue({ data: { user: mockSession.user }, error: null }),
         getSession: vi.fn().mockResolvedValue({ data: { session: mockSession }, error: null })
     },
     from: vi.fn().mockImplementation((table) => {
+        if (table === 'cv_metadata') {
+            return {
+                select: vi.fn().mockReturnThis(),
+                eq: vi.fn().mockReturnThis(),
+                order: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockResolvedValue({
+                    data: [{
+                        id: 'cv-123',
+                        cv_hash: 'hash-123',
+                        extracted_info: {
+                            name: 'John Doe',
+                            contactInfo: { email: 'john@example.com' },
+                            experience: [{ title: 'Developer', company: 'Tech Corp', duration: '2020-2024' }],
+                            education: [{ degree: 'BS', institution: 'University', year: '2020' }],
+                            skills: ['JavaScript', 'React']
+                        }
+                    }],
+                    error: null
+                })
+            }
+        }
         if (table === 'tailored_cvs') {
             return {
                 insert: vi.fn().mockReturnThis(),
                 select: vi.fn().mockReturnThis(),
+                eq: vi.fn().mockReturnThis(),
+                order: vi.fn().mockReturnThis(),
+                limit: vi.fn().mockReturnThis(),
                 single: vi.fn().mockResolvedValue({
-                    data: { id: 'tailored_123' },
+                    data: { id: 'tailored_123', version: 1 },
                     error: null
                 })
             }
         }
         return {}
     })
-}
+})
 
 describe('Tailored CV API', () => {
     beforeEach(() => {
         vi.clearAllMocks()
-        vi.mocked(createServerSupabaseClient).mockResolvedValue(mockSupabase as any)
+        ;(global as any).mockProAccessDenied = false
+        ;(global as any).mockSupabase = createMockSupabase()
     })
 
     describe('POST /api/tailor-cv', () => {
         it('should return 403 if user is not pro', async () => {
-            vi.mocked(hasProAccess).mockResolvedValue(false)
+            ;(global as any).mockProAccessDenied = true
 
             const mockRequest = {
-                json: vi.fn().mockResolvedValue({ cvContent: 'cv', jobDescription: 'jd' })
+                json: vi.fn().mockResolvedValue({ jobDescription: 'jd' })
             } as unknown as NextRequest
 
             const response = await tailorCV(mockRequest)
@@ -71,10 +98,8 @@ describe('Tailored CV API', () => {
         })
 
         it('should generate tailored CV successfully for pro users', async () => {
-            vi.mocked(hasProAccess).mockResolvedValue(true)
-
             const mockRequest = {
-                json: vi.fn().mockResolvedValue({ cvContent: 'cv', jobDescription: 'jd' })
+                json: vi.fn().mockResolvedValue({ jobDescription: 'jd' })
             } as unknown as NextRequest
 
             const mockCompletion = {
@@ -90,8 +115,6 @@ describe('Tailored CV API', () => {
         })
 
         it('should strip markdown code blocks from OpenAI response', async () => {
-            vi.mocked(hasProAccess).mockResolvedValue(true)
-
             const mockCompletion = {
                 choices: [{
                     message: {
@@ -103,7 +126,6 @@ describe('Tailored CV API', () => {
 
             const mockRequest = {
                 json: vi.fn().mockResolvedValue({
-                    cvContent: 'original cv',
                     jobDescription: 'job desc'
                 })
             } as unknown as NextRequest
@@ -118,8 +140,6 @@ describe('Tailored CV API', () => {
 
     describe('POST /api/tailored-cvs', () => {
         it('should save tailored CV successfully', async () => {
-            vi.mocked(hasProAccess).mockResolvedValue(true)
-
             const mockBody = {
                 job_position_id: 'pos_123',
                 cv_content: 'original cv',
@@ -136,7 +156,7 @@ describe('Tailored CV API', () => {
                 })
             })
 
-            mockSupabase.from.mockImplementation((table) => {
+            ;(global as any).mockSupabase.from.mockImplementation((table: string) => {
                 if (table === 'tailored_cvs') {
                     return {
                         select: vi.fn().mockReturnValue({
@@ -166,8 +186,6 @@ describe('Tailored CV API', () => {
         })
 
         it('should return 400 if tailored content is too short', async () => {
-            vi.mocked(hasProAccess).mockResolvedValue(true)
-
             const mockBody = {
                 job_position_id: 'pos_123',
                 cv_content: 'original cv',

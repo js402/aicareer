@@ -294,7 +294,7 @@ export function CVViewModal({
                                                 <Settings className="h-8 w-8 text-slate-400" />
                                             </div>
                                             <p className="text-lg font-medium mb-2">No content available</p>
-                                            <p className="text-sm">This CV version doesn't have tailored content yet.</p>
+                                            <p className="text-sm">This CV version doesn&apos;t have tailored content yet.</p>
                                         </div>
                                     )}
                                 </div>

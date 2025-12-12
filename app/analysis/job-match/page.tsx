@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Sparkles, Loader2, FileText, ArrowLeft, Building2, MapPin, DollarSign, CheckCircle2 } from "lucide-react"
+import { Sparkles, Loader2, FileText, ArrowLeft, Building2, MapPin, DollarSign, CheckCircle2, Edit } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { useCVStore } from "@/hooks/useCVStore"
 import { useAuthGuard } from "@/hooks/useAuthGuard"
@@ -15,6 +15,8 @@ import { JobMatchAnalysis } from "@/components/analysis/JobMatchAnalysis"
 import { ErrorAlert } from "@/components/analysis/error-alert"
 import { Input } from "@/components/ui/input"
 import { useFetch } from "@/hooks/useFetch"
+import { CVEditorModal } from "@/components/cv-editor"
+import type { ExtractedCVInfo } from "@/lib/api-client"
 
 interface CVMetadata {
     id: string
@@ -63,6 +65,8 @@ export default function JobMatchPage() {
     const [isSaving, setIsSaving] = useState(false)
     const [trackError, setTrackError] = useState('')
     const [selectedCvId, setSelectedCvId] = useState<string>('')
+    const [isEditorOpen, setIsEditorOpen] = useState(false)
+    const [selectedCvInfo, setSelectedCvInfo] = useState<ExtractedCVInfo | null>(null)
 
     // Local state for editing metadata before saving
     const [editedMetadata, setEditedMetadata] = useState({
@@ -94,7 +98,45 @@ export default function JobMatchPage() {
         }
     }, [suggestedCvId, selectedCvId])
 
+    // Fetch selected CV's extracted info for editing
+    useEffect(() => {
+        const fetchCvInfo = async () => {
+            if (!selectedCvId) {
+                setSelectedCvInfo(null)
+                return
+            }
+            try {
+                const response = await fetch(`/api/cv-metadata/${selectedCvId}`)
+                if (response.ok) {
+                    const data = await response.json()
+                    setSelectedCvInfo(data.metadata?.extracted_info || null)
+                }
+            } catch (error) {
+                console.error('Error fetching CV info:', error)
+            }
+        }
+        fetchCvInfo()
+    }, [selectedCvId])
+
     useAuthGuard({ redirectTo: 'analysis/job-match', requireCV: true, cvContent })
+
+    const handleSaveCVEdits = async (updatedInfo: ExtractedCVInfo) => {
+        if (!selectedCvId) return
+        
+        try {
+            const response = await fetch(`/api/cv-metadata/${selectedCvId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ extractedInfo: updatedInfo })
+            })
+            
+            if (response.ok) {
+                setSelectedCvInfo(updatedInfo)
+            }
+        } catch (error) {
+            console.error('Error saving CV edits:', error)
+        }
+    }
 
     const handleJobMatch = async () => {
         if (!jobDescription.trim()) return
@@ -221,11 +263,24 @@ export default function JobMatchPage() {
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            {suggestedCvId && selectedCvId !== suggestedCvId && (
-                                                <Button variant="outline" size="sm" className="mt-2" onClick={() => setSelectedCvId(suggestedCvId)}>
-                                                    Use Suggested CV
-                                                </Button>
-                                            )}
+                                            <div className="flex gap-2 mt-2">
+                                                {suggestedCvId && selectedCvId !== suggestedCvId && (
+                                                    <Button variant="outline" size="sm" onClick={() => setSelectedCvId(suggestedCvId)}>
+                                                        Use Suggested CV
+                                                    </Button>
+                                                )}
+                                                {selectedCvId && selectedCvInfo && (
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
+                                                        onClick={() => setIsEditorOpen(true)}
+                                                        className="gap-1"
+                                                    >
+                                                        <Edit className="h-3 w-3" />
+                                                        Edit CV
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
                                             <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Job Description</label>
@@ -410,6 +465,18 @@ export default function JobMatchPage() {
                         </div>
                     </CardContent>
                 </Card>
+
+                {/* CV Editor Modal */}
+                {selectedCvInfo && (
+                    <CVEditorModal
+                        open={isEditorOpen}
+                        onOpenChange={setIsEditorOpen}
+                        initialData={selectedCvInfo}
+                        onSave={handleSaveCVEdits}
+                        title="Edit CV Before Matching"
+                        description="Update your CV information to improve job match accuracy"
+                    />
+                )}
             </main>
         </div>
     )

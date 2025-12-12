@@ -1,38 +1,39 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent } from "@/components/ui/card"
 import { Navbar } from "@/components/navbar"
 import { supabase } from "@/lib/supabase"
 import { useCVStore } from "@/hooks/useCVStore"
 import { useSubscription } from "@/hooks/useSubscription"
-import { ArrowLeft, Sparkles, FileText, Loader2, CheckCircle, AlertCircle, Download, Briefcase, GraduationCap, Award, User } from "lucide-react"
+import { ArrowLeft, Sparkles, FileText, Download, CheckCircle, Edit, AlertCircle } from "lucide-react"
 import { downloadTextFile } from "@/lib/download-helpers"
-import { extractCVMetadata, analyzeCV } from "@/lib/api-client"
-import { MissingInfoModal } from "@/components/analysis/MissingInfoModal"
-import type { ExtractedCVInfo, AnalyzeCVResponse } from "@/lib/api-client"
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { PageLoader, LoadingSpinner } from "@/components/ui/loading-spinner"
+import { StatusAlert } from "@/components/ui/status-alert"
+import { useCVOperations } from "@/hooks/useCVOperations"
+import { CVMetadataDisplay } from "@/components/analysis/cv-metadata-display"
+import { AnalysisResults } from "@/components/analysis/analysis-results"
+import { CVEditorModal, validateCV } from "@/components/cv-editor"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 export default function AnalysisPage() {
     const router = useRouter()
-    const { content: cvContent, filename, extractedInfo, setExtractedInfo, analysis, setAnalysis, appendSupplementalInfo, clear: clearCV } = useCVStore()
+    const { content: cvContent, filename, extractedInfo, setExtractedInfo, updateExtractedInfo, metadataId, analysis, setAnalysis, appendSupplementalInfo, clear: clearCV } = useCVStore()
     const { hasProAccess, isLoading: subLoading } = useSubscription()
+    const cvOperations = useCVOperations()
 
     const [isMounted, setIsMounted] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
-    const [isExtracting, setIsExtracting] = useState(false)
     const [isAnalyzing, setIsAnalyzing] = useState(false)
-    const [error, setError] = useState<string>('')
+    const [isEditorOpen, setIsEditorOpen] = useState(false)
+    const [hasAutoOpenedEditor, setHasAutoOpenedEditor] = useState(false)
 
-    // Missing info modal state
-    const [missingInfoQuestions, setMissingInfoQuestions] = useState<string[]>([])
-    const [isMissingInfoModalOpen, setIsMissingInfoModalOpen] = useState(false)
-    const [isProcessingSupplementalInfo, setIsProcessingSupplementalInfo] = useState(false)
+    // Validate CV data to check completeness
+    const cvValidation = useMemo(() => {
+        return extractedInfo ? validateCV(extractedInfo) : null
+    }, [extractedInfo])
 
     // Check authentication and load data
     useEffect(() => {
@@ -62,95 +63,35 @@ export default function AnalysisPage() {
 
             setIsMounted(true)
             setIsLoading(false)
-
-            // If we have CV content but no extracted info, start extraction
-            if (cvContent && !extractedInfo && hasProAccess) {
-                extractMetadata()
-            }
         }
 
         checkAuthAndLoad()
     }, [cvContent, hasProAccess, subLoading, router, extractedInfo])
 
-    const extractMetadata = async () => {
-        if (!cvContent || !hasProAccess) return
-
-        setIsExtracting(true)
-        setError('')
-
-        try {
-            const result = await extractCVMetadata(cvContent)
-
-            if (result.status === 'incomplete' && result.questions) {
-                // Show modal for missing info
-                setMissingInfoQuestions(result.questions)
-                setIsMissingInfoModalOpen(true)
-
-                // Still set extracted info if available
-                if (result.extractedInfo) {
-                    setExtractedInfo(result.extractedInfo)
-                }
-            } else if (result.status === 'valid' || result.status === 'cached') {
-                if (result.extractedInfo) {
-                    setExtractedInfo(result.extractedInfo)
-                }
-            } else if (result.status === 'invalid') {
-                setError(result.message || 'Invalid CV format')
-            } else {
-                setError('Failed to extract metadata')
+    // Extract metadata when CV content is available but no extracted info exists
+    useEffect(() => {
+        if (isMounted && cvContent && !extractedInfo && hasProAccess) {
+            const extractMetadata = async () => {
+                await cvOperations.extractMetadata(cvContent)
             }
-        } catch (err) {
-            console.error('Extraction error:', err)
-            setError('Failed to process your CV')
-        } finally {
-            setIsExtracting(false)
+            extractMetadata()
         }
-    }
+    }, [isMounted, cvContent, extractedInfo, hasProAccess, cvOperations])
+
+    // Auto-open editor if CV is incomplete (after extraction completes)
+    useEffect(() => {
+        if (cvValidation && !cvValidation.isComplete && !hasAutoOpenedEditor && !cvOperations.isLoading) {
+            setIsEditorOpen(true)
+            setHasAutoOpenedEditor(true)
+        }
+    }, [cvValidation, hasAutoOpenedEditor, cvOperations.isLoading])
 
     const handleAnalyze = async () => {
         if (!cvContent) return
 
         setIsAnalyzing(true)
-        setError('')
-
-        try {
-            const result: AnalyzeCVResponse = await analyzeCV(cvContent)
-
-            if (result.status === 'incomplete' && result.questions) {
-                // Show modal for missing info
-                setMissingInfoQuestions(result.questions)
-                setIsMissingInfoModalOpen(true)
-            } else if (result.status === 'invalid') {
-                setError(result.message || 'Invalid CV format')
-            } else if (result.analysis) {
-                setAnalysis(result.analysis)
-            } else {
-                setError('Failed to generate analysis')
-            }
-        } catch (err) {
-            console.error('Analysis error:', err)
-            setError(err instanceof Error ? err.message : 'Failed to analyze CV')
-        } finally {
-            setIsAnalyzing(false)
-        }
-    }
-
-    const handleMissingInfoSubmit = async (answers: string[]) => {
-        setIsProcessingSupplementalInfo(true)
-        setIsMissingInfoModalOpen(false)
-
-        try {
-            // Append supplemental info to CV store
-            appendSupplementalInfo(missingInfoQuestions, answers)
-
-            // Re-extract with updated content
-            await extractMetadata()
-        } catch (error) {
-            console.error('Error processing supplemental info:', error)
-            setError('Failed to process supplemental information.')
-        } finally {
-            setIsProcessingSupplementalInfo(false)
-        }
+        await cvOperations.analyzeCV(cvContent)
+        setIsAnalyzing(false)
     }
 
     const handleDownload = () => {
@@ -174,6 +115,30 @@ export default function AnalysisPage() {
         router.push('/career-guidance')
     }
 
+    const handleSaveCVEdits = async (updatedInfo: typeof extractedInfo) => {
+        if (!updatedInfo) return
+        
+        // Update local state immediately
+        updateExtractedInfo(updatedInfo)
+        
+        // If we have a metadataId, save to the database
+        if (metadataId) {
+            try {
+                const response = await fetch(`/api/cv-metadata/${metadataId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ extractedInfo: updatedInfo })
+                })
+                
+                if (!response.ok) {
+                    console.error('Failed to save CV edits to database')
+                }
+            } catch (error) {
+                console.error('Error saving CV edits:', error)
+            }
+        }
+    }
+
     const formatContactInfo = (contactInfo: string | any) => {
         if (typeof contactInfo === 'string') {
             return contactInfo
@@ -190,31 +155,11 @@ export default function AnalysisPage() {
     }
 
     if (!isMounted || isLoading || subLoading) {
-        return (
-            <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
-                <Navbar />
-                <main className="flex-1 flex items-center justify-center">
-                    <div className="text-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
-                        <p className="text-muted-foreground">Loading analysis...</p>
-                    </div>
-                </main>
-            </div>
-        )
+        return <PageLoader message="Loading analysis..." />
     }
 
     if (!hasProAccess) {
-        return (
-            <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
-                <Navbar />
-                <main className="flex-1 flex items-center justify-center">
-                    <div className="text-center">
-                        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
-                        <p className="text-muted-foreground">Redirecting to pricing...</p>
-                    </div>
-                </main>
-            </div>
-        )
+        return <PageLoader message="Redirecting to pricing..." />
     }
 
     return (
@@ -295,26 +240,44 @@ export default function AnalysisPage() {
                 </div>
 
                 {/* Error Display */}
-                {error && (
-                    <Card className="mb-6 border-red-500/50 bg-red-50/50 dark:bg-red-950/20">
-                        <CardContent className="pt-6">
-                            <div className="flex items-start gap-3">
-                                <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" />
-                                <div>
-                                    <h3 className="font-semibold text-red-700 dark:text-red-300 mb-1">Error</h3>
-                                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                {cvOperations.error && (
+                    <StatusAlert
+                        variant="error"
+                        title="Error"
+                        message={cvOperations.error}
+                        className="mb-6"
+                    />
+                )}
+
+                {/* Incomplete CV Alert */}
+                {cvValidation && !cvValidation.isComplete && !cvOperations.isLoading && (
+                    <Alert variant="destructive" className="mb-6">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>CV Information Incomplete</AlertTitle>
+                        <AlertDescription className="flex items-center justify-between">
+                            <span>
+                                {cvValidation.criticalMissing.length} required field{cvValidation.criticalMissing.length !== 1 ? 's' : ''} missing. 
+                                Complete your profile for accurate analysis.
+                            </span>
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setIsEditorOpen(true)}
+                                className="ml-4 shrink-0"
+                            >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Complete Now
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
                 )}
 
                 {/* Loading State */}
-                {isExtracting && (
+                {cvOperations.isLoading && (
                     <Card className="mb-6">
                         <CardContent className="pt-6">
                             <div className="flex items-center justify-center gap-3 py-8">
-                                <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                                <LoadingSpinner />
                                 <p className="text-muted-foreground">Extracting CV metadata...</p>
                             </div>
                         </CardContent>
@@ -323,221 +286,40 @@ export default function AnalysisPage() {
 
                 {/* Main Analysis Content */}
                 <div className="space-y-6">
-                    {/* CV Metadata Card */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <FileText className="h-5 w-5 text-blue-600" />
-                                Extracted CV Information
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {isExtracting ? (
-                                <div className="flex items-center justify-center py-8">
-                                    <Loader2 className="h-6 w-6 animate-spin text-blue-600 mr-2" />
-                                    <span className="text-muted-foreground">Extracting metadata...</span>
-                                </div>
-                            ) : extractedInfo ? (
-                                <div className="space-y-4">
-                                    {/* Personal Info */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <div className="flex items-center gap-2">
-                                                <User className="h-4 w-4 text-muted-foreground" />
-                                                <span className="font-medium">Name:</span>
-                                                <span>{extractedInfo.name || 'Not specified'}</span>
-                                            </div>
-
-                                            {extractedInfo.contactInfo && (
-                                                <div className="space-y-1 pl-6">
-                                                    <pre className="text-sm whitespace-pre-wrap font-sans">
-                                                        {formatContactInfo(extractedInfo.contactInfo)}
-                                                    </pre>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Skills */}
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <Award className="h-4 w-4 text-muted-foreground" />
-                                                <span className="font-medium">Skills:</span>
-                                                <Badge variant="outline">
-                                                    {extractedInfo.skills.length} skills
-                                                </Badge>
-                                            </div>
-                                            <div className="flex flex-wrap gap-1">
-                                                {extractedInfo.skills.slice(0, 10).map((skill, index) => (
-                                                    <Badge key={index} variant="secondary" className="text-xs">
-                                                        {skill}
-                                                    </Badge>
-                                                ))}
-                                                {extractedInfo.skills.length > 10 && (
-                                                    <Badge variant="outline" className="text-xs">
-                                                        +{extractedInfo.skills.length - 10} more
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Experience & Education */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <Briefcase className="h-4 w-4 text-muted-foreground" />
-                                                <span className="font-medium">Experience</span>
-                                                <Badge variant="outline">
-                                                    {extractedInfo.experience.length} roles
-                                                </Badge>
-                                            </div>
-                                            <div className="space-y-2">
-                                                {extractedInfo.experience.slice(0, 3).map((exp, index) => (
-                                                    <div key={index} className="text-sm">
-                                                        <div className="font-medium">{exp.role}</div>
-                                                        <div className="text-muted-foreground">{exp.company}</div>
-                                                        <div className="text-xs text-muted-foreground">{exp.duration}</div>
-                                                    </div>
-                                                ))}
-                                                {extractedInfo.experience.length > 3 && (
-                                                    <div className="text-sm text-muted-foreground">
-                                                        +{extractedInfo.experience.length - 3} more experiences
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <GraduationCap className="h-4 w-4 text-muted-foreground" />
-                                                <span className="font-medium">Education</span>
-                                                <Badge variant="outline">
-                                                    {extractedInfo.education.length} degrees
-                                                </Badge>
-                                            </div>
-                                            <div className="space-y-2">
-                                                {extractedInfo.education.slice(0, 3).map((edu, index) => (
-                                                    <div key={index} className="text-sm">
-                                                        <div className="font-medium">{edu.degree}</div>
-                                                        <div className="text-muted-foreground">{edu.institution}</div>
-                                                        <div className="text-xs text-muted-foreground">{edu.year}</div>
-                                                    </div>
-                                                ))}
-                                                {extractedInfo.education.length > 3 && (
-                                                    <div className="text-sm text-muted-foreground">
-                                                        +{extractedInfo.education.length - 3} more education entries
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="text-center py-8 text-muted-foreground">
-                                    No metadata extracted yet. {error || 'Upload a valid CV to begin.'}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                    {/* CV Metadata Card with Edit Button */}
+                    <div className="relative">
+                        {extractedInfo && !cvOperations.isLoading && (
+                            <div className="absolute top-4 right-4 z-10">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsEditorOpen(true)}
+                                    className="gap-2"
+                                >
+                                    <Edit className="h-4 w-4" />
+                                    Edit CV Data
+                                </Button>
+                            </div>
+                        )}
+                        <CVMetadataDisplay 
+                            extractedInfo={extractedInfo} 
+                            isLoading={cvOperations.isLoading}
+                        />
+                    </div>
 
                     {/* AI Analysis Section */}
-                    {extractedInfo && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    <Sparkles className="h-5 w-5 text-purple-600" />
-                                    AI Career Analysis
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {!analysis ? (
-                                    <div className="space-y-4">
-                                        <p className="text-muted-foreground">
-                                            Get an AI-powered analysis of your CV with insights on strengths,
-                                            career trajectory, and recommendations.
-                                        </p>
-
-                                        <Button
-                                            onClick={handleAnalyze}
-                                            disabled={isAnalyzing}
-                                            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                                        >
-                                            {isAnalyzing ? (
-                                                <>
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    Analyzing...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Sparkles className="mr-2 h-4 w-4" />
-                                                    Generate AI Analysis
-                                                </>
-                                            )}
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <Tabs defaultValue="analysis">
-                                        <TabsList className="mb-4">
-                                            <TabsTrigger value="analysis">Analysis</TabsTrigger>
-                                            <TabsTrigger value="raw">Raw Text</TabsTrigger>
-                                        </TabsList>
-
-                                        <TabsContent value="analysis">
-                                            <div className="prose dark:prose-invert max-w-none">
-                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                    {analysis}
-                                                </ReactMarkdown>
-                                            </div>
-                                        </TabsContent>
-
-                                        <TabsContent value="raw">
-                                            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg">
-                                                <pre className="whitespace-pre-wrap break-words font-mono text-xs text-slate-700 dark:text-slate-300">
-                                                    {analysis}
-                                                </pre>
-                                            </div>
-                                        </TabsContent>
-                                    </Tabs>
-                                )}
-
-                                {analysis && (
-                                    <div className="mt-4 flex gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                                const blob = new Blob([analysis], { type: 'text/plain' })
-                                                const url = URL.createObjectURL(blob)
-                                                const a = document.createElement('a')
-                                                a.href = url
-                                                a.download = `${filename}-analysis.txt`
-                                                document.body.appendChild(a)
-                                                a.click()
-                                                document.body.removeChild(a)
-                                                URL.revokeObjectURL(url)
-                                            }}
-                                        >
-                                            Download Analysis
-                                        </Button>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(analysis)
-                                                alert('Analysis copied to clipboard!')
-                                            }}
-                                        >
-                                            Copy to Clipboard
-                                        </Button>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
+                    {extractedInfo && !cvOperations.isLoading && (
+                        <AnalysisResults
+                            analysis={analysis}
+                            isAnalyzing={isAnalyzing}
+                            filename={filename}
+                            onAnalyze={handleAnalyze}
+                        />
                     )}
                 </div>
 
                 {/* Next Steps */}
-                {extractedInfo && !isExtracting && (
+                {extractedInfo && !cvOperations.isLoading && (
                     <Card className="mt-6 border-purple-500/20 bg-purple-50/10 dark:bg-purple-950/10">
                         <CardContent className="pt-6">
                             <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
@@ -602,17 +384,20 @@ export default function AnalysisPage() {
                     )}
                 </div>
 
-                {/* Missing Info Modal */}
-                <MissingInfoModal
-                    isOpen={isMissingInfoModalOpen}
-                    questions={missingInfoQuestions}
-                    onSubmit={handleMissingInfoSubmit}
-                    onCancel={() => {
-                        setIsMissingInfoModalOpen(false)
-                        setMissingInfoQuestions([])
-                    }}
-                    isSubmitting={isProcessingSupplementalInfo}
-                />
+                {/* CV Editor Modal */}
+                {extractedInfo && (
+                    <CVEditorModal
+                        open={isEditorOpen}
+                        onOpenChange={setIsEditorOpen}
+                        initialData={extractedInfo}
+                        onSave={handleSaveCVEdits}
+                        title={cvValidation && !cvValidation.isComplete ? "Complete Your CV" : "Edit CV Data"}
+                        description={cvValidation && !cvValidation.isComplete 
+                            ? "Please fill in the missing required fields to enable full analysis"
+                            : "Update your CV information before analysis or job matching"
+                        }
+                    />
+                )}
             </main>
         </div>
     )

@@ -6,21 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Navbar } from "@/components/navbar"
 import { CheckCircle2, Loader2 } from "lucide-react"
+import { useTimeout, useAutoRedirect } from '@/hooks/useTimeout'
 
 function SuccessContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const sessionId = searchParams.get('session_id')
-    const [isLoading, setIsLoading] = useState(true)
+    const isDone = useTimeout(1500)
+    const [autoRedirect, setAutoRedirect] = useState(true)
+    useAutoRedirect(4000, () => {
+        if (autoRedirect) router.push('/analysis')
+    })
 
-    useEffect(() => {
-        // Simulate verification
-        setTimeout(() => {
-            setIsLoading(false)
-        }, 1500)
-    }, [])
-
-    if (isLoading) {
+    if (!isDone) {
         return (
             <Card className="w-full max-w-md">
                 <CardContent className="pt-6 text-center space-y-4">
@@ -62,6 +60,12 @@ function SuccessContent() {
                         onClick={() => router.push('/analysis')}
                     >
                         Start Analyzing
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        onClick={() => setAutoRedirect((v) => !v)}
+                    >
+                        {autoRedirect ? 'Pause Auto-Redirect' : 'Resume Auto-Redirect'}
                     </Button>
                 </div>
             </CardContent>

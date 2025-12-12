@@ -168,7 +168,7 @@ describe('Job Positions API', () => {
             const mockRequest = {
                 nextUrl: { pathname: '/api/job-positions/pos_123' }
             } as unknown as NextRequest
-            const response = await GET_ONE(mockRequest, { params: Promise.resolve({ id: 'pos_123' }) })
+            const response = await GET_ONE(mockRequest)
             const data = await response.json()
 
             expect(response.status).toBe(200)
@@ -196,7 +196,7 @@ describe('Job Positions API', () => {
                 json: vi.fn().mockResolvedValue(mockBody),
                 nextUrl: { pathname: '/api/job-positions/pos_123' }
             } as unknown as NextRequest
-            const response = await PATCH(patchMockRequest, { params: Promise.resolve({ id: 'pos_123' }) })
+            const response = await PATCH(patchMockRequest)
             const data = await response.json()
 
             expect(response.status).toBe(200)
@@ -225,7 +225,7 @@ describe('Job Positions API', () => {
                 json: vi.fn().mockResolvedValue(mockBody),
                 nextUrl: { pathname: '/api/job-positions/pos_123' }
             } as unknown as NextRequest
-            const response = await PATCH(patchMockRequest, { params: Promise.resolve({ id: 'pos_123' }) })
+            const response = await PATCH(patchMockRequest)
             const data = await response.json()
 
             expect(response.status).toBe(200)
@@ -251,7 +251,7 @@ describe('Job Positions API', () => {
             const deleteMockRequest = {
                 nextUrl: { pathname: '/api/job-positions/pos_123' }
             } as unknown as NextRequest
-            const response = await DELETE(deleteMockRequest, { params: Promise.resolve({ id: 'pos_123' }) })
+            const response = await DELETE(deleteMockRequest)
             const data = await response.json()
 
             expect(response.status).toBe(200)

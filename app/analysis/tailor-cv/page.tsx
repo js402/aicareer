@@ -4,23 +4,26 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Sparkles, Loader2, ArrowLeft, Copy, Download, Check } from "lucide-react"
+import { Sparkles, Loader2, ArrowLeft, Copy, Download, Check, Edit } from "lucide-react"
 import { Navbar } from "@/components/navbar"
 import { useCVStore } from "@/hooks/useCVStore"
 import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { PremiumBadge } from "@/components/analysis/premium-badge"
 import { ErrorAlert } from "@/components/analysis/error-alert"
+import { CVEditorModal } from "@/components/cv-editor"
+import type { ExtractedCVInfo } from "@/lib/api-client"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 export default function TailorCVPage() {
     const router = useRouter()
-    const { content: cvContent, jobDescription } = useCVStore()
+    const { content: cvContent, jobDescription, extractedInfo, updateExtractedInfo, metadataId } = useCVStore()
 
     const [tailoredCV, setTailoredCV] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
     const [error, setError] = useState('')
     const [copied, setCopied] = useState(false)
+    const [isEditorOpen, setIsEditorOpen] = useState(false)
 
     useAuthGuard({
         redirectTo: 'analysis/tailor-cv',
@@ -74,6 +77,28 @@ export default function TailorCVPage() {
         URL.revokeObjectURL(url)
     }
 
+    const handleSaveCVEdits = async (updatedInfo: ExtractedCVInfo) => {
+        // Update local state
+        updateExtractedInfo(updatedInfo)
+        
+        // If we have a metadataId, save to the database
+        if (metadataId) {
+            try {
+                const response = await fetch(`/api/cv-metadata/${metadataId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ extractedInfo: updatedInfo })
+                })
+                
+                if (!response.ok) {
+                    console.error('Failed to save CV edits to database')
+                }
+            } catch (error) {
+                console.error('Error saving CV edits:', error)
+            }
+        }
+    }
+
     if (!cvContent || !jobDescription) return null
 
     return (
@@ -117,14 +142,27 @@ export default function TailorCVPage() {
                                 <p className="text-muted-foreground mb-8 max-w-md mx-auto">
                                     We&apos;ll rewrite your CV to highlight the skills and experience most relevant to the job description you provided.
                                 </p>
-                                <Button
-                                    onClick={generateTailoredCV}
-                                    size="lg"
-                                    className="bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-600/20 transition-all hover:scale-105"
-                                >
-                                    <Sparkles className="mr-2 h-5 w-5" />
-                                    Generate Tailored CV
-                                </Button>
+                                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                                    {extractedInfo && (
+                                        <Button
+                                            variant="outline"
+                                            size="lg"
+                                            onClick={() => setIsEditorOpen(true)}
+                                            className="gap-2"
+                                        >
+                                            <Edit className="h-5 w-5" />
+                                            Edit CV First
+                                        </Button>
+                                    )}
+                                    <Button
+                                        onClick={generateTailoredCV}
+                                        size="lg"
+                                        className="bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-600/20 transition-all hover:scale-105"
+                                    >
+                                        <Sparkles className="mr-2 h-5 w-5" />
+                                        Generate Tailored CV
+                                    </Button>
+                                </div>
                             </div>
                         )}
 
@@ -171,6 +209,18 @@ export default function TailorCVPage() {
                         )}
                     </CardContent>
                 </Card>
+
+                {/* CV Editor Modal */}
+                {extractedInfo && (
+                    <CVEditorModal
+                        open={isEditorOpen}
+                        onOpenChange={setIsEditorOpen}
+                        initialData={extractedInfo}
+                        onSave={handleSaveCVEdits}
+                        title="Edit CV Before Tailoring"
+                        description="Fine-tune your CV data to get a better tailored result"
+                    />
+                )}
             </main>
         </div>
     )

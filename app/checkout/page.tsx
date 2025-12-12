@@ -6,43 +6,29 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Navbar } from "@/components/navbar"
 import { ArrowLeft, ShieldCheck, Loader2, CreditCard, CheckCircle } from "lucide-react"
+import { useCreateCheckoutSession } from '@/hooks/useCheckout'
 
 export default function CheckoutPage() {
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string>('')
+    const { mutate: createSession } = useCreateCheckoutSession()
 
     const handleCheckout = async () => {
         setIsLoading(true)
         setError('')
 
         try {
-            // Create checkout session
-            const response = await fetch('/api/create-checkout-session', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    // Replace with your actual Stripe Price ID
-                    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || 'price_1234567890',
-                }),
+            const result = await createSession({
+                priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || 'price_1234567890',
             })
-
-            const { sessionUrl, error: apiError } = await response.json()
-
-            if (apiError) {
-                throw new Error(apiError)
-            }
-
-            // Redirect to Stripe Checkout using the session URL
-            if (sessionUrl) {
-                window.location.href = sessionUrl
-            } else {
-                throw new Error('No checkout URL received')
-            }
+            const { sessionUrl, error: apiError } = result || {}
+            if (apiError) throw new Error(apiError)
+            if (!sessionUrl) throw new Error('No checkout URL received')
+            window.location.href = sessionUrl
         } catch (err) {
             console.error('Checkout error:', err)
-            setError(err instanceof Error ? err.message : 'Failed to start checkout')
+            setError(err instanceof Error ? err.message : 'Checkout failed')
+        } finally {
             setIsLoading(false)
         }
     }
@@ -122,7 +108,6 @@ export default function CheckoutPage() {
                             </Card>
                         )}
                     </div>
-
                     {/* Order Summary */}
                     <div className="lg:col-span-1">
                         <Card className="sticky top-24">
@@ -148,7 +133,6 @@ export default function CheckoutPage() {
                                         <span>Calculated at checkout</span>
                                     </div>
                                 </div>
-
                                 <div className="border-t pt-4 flex justify-between font-bold text-lg">
                                     <span>Total</span>
                                     <span>$9.99/mo</span>
