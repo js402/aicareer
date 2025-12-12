@@ -273,7 +273,7 @@ export function PersonalInfoSection({
                     value={summary}
                     onChange={(e) => onChange('summary', e.target.value)}
                     placeholder="A brief professional summary highlighting your key strengths and career objectives..."
-                    className="min-h-[120px]"
+                    className="min-h-[180px] text-base leading-relaxed"
                     disabled={readOnly}
                 />
                 <div className="flex justify-between text-xs text-muted-foreground">

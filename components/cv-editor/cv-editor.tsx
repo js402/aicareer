@@ -11,9 +11,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { 
     User, Briefcase, GraduationCap, Code, FolderOpen, Award, 
     Globe, Save, X, RotateCcw, CheckCircle, AlertCircle,
-    AlertTriangle, Info, Loader2
+    AlertTriangle, Info, Loader2, Users
 } from "lucide-react"
-import type { ExtractedCVInfo } from "@/lib/api-client"
+import type { ExtractedCVInfo, LeadershipEntry } from "@/lib/api-client"
 import { PersonalInfoSection } from "./sections/personal-info-section"
 import { ExperienceSection } from "./sections/experience-section"
 import { EducationSection } from "./sections/education-section"
@@ -21,6 +21,7 @@ import { SkillsSection } from "./sections/skills-section"
 import { ProjectsSection } from "./sections/projects-section"
 import { CertificationsSection } from "./sections/certifications-section"
 import { LanguagesSection } from "./sections/languages-section"
+import { LeadershipSection } from "./sections"
 import { validateCV, getFirstIncompleteSectionId, type SectionValidation } from "./cv-validation"
 
 export interface CVEditorProps {
@@ -47,6 +48,7 @@ interface SectionConfig {
 const SECTIONS: SectionConfig[] = [
     { id: 'personal', label: 'Personal Info', icon: User, description: 'Name, contact details, and summary' },
     { id: 'experience', label: 'Experience', icon: Briefcase, description: 'Work history and achievements' },
+    { id: 'leadership', label: 'Leadership', icon: Users, description: 'Leadership roles and impact' },
     { id: 'education', label: 'Education', icon: GraduationCap, description: 'Degrees and certifications' },
     { id: 'skills', label: 'Skills', icon: Code, description: 'Technical and soft skills' },
     { id: 'projects', label: 'Projects', icon: FolderOpen, description: 'Personal and professional projects' },
@@ -180,43 +182,72 @@ export function CVEditor({
     }
 
     return (
-        <div className={`flex flex-col ${compact ? 'gap-4' : 'gap-6'}`}>
-            {/* Header with completion status */}
-            <div className="flex items-center justify-between">
+        <div className={`flex flex-col h-full ${compact ? 'gap-3' : 'gap-4'}`}>
+            {/* Header with actions */}
+            <div className="flex items-center justify-between pb-3 border-b shrink-0">
                 <div className="flex items-center gap-4">
-                    <div>
-                        <h2 className="text-xl font-semibold">CV Editor</h2>
-                        <p className="text-sm text-muted-foreground">
-                            Complete your profile for better job matching
-                        </p>
-                    </div>
-                </div>
-                
-                <div className="flex items-center gap-3">
                     {/* Completion Progress */}
                     <div className="flex items-center gap-2">
                         <Progress 
                             value={validation.overallScore} 
-                            className="w-24 h-2"
+                            className="w-20 h-2"
                         />
-                        <Badge variant={validation.isComplete ? "default" : "secondary"}>
+                        <Badge variant={validation.isComplete ? "default" : "secondary"} className="text-xs">
                             {validation.overallScore}%
                         </Badge>
                     </div>
                     
                     {/* Status badges */}
                     {hasChanges && (
-                        <Badge variant="outline" className="text-amber-600 border-amber-300">
+                        <Badge variant="outline" className="text-amber-600 border-amber-300 text-xs">
                             Unsaved
                         </Badge>
                     )}
                     {saveSuccess && (
-                        <Badge variant="outline" className="text-green-600 border-green-300">
+                        <Badge variant="outline" className="text-green-600 border-green-300 text-xs">
                             <CheckCircle className="h-3 w-3 mr-1" />
                             Saved
                         </Badge>
                     )}
                 </div>
+                
+                {/* Action buttons */}
+                {!readOnly && (
+                    <div className="flex items-center gap-2">
+                        {onCancel && (
+                            <Button variant="ghost" size="sm" onClick={onCancel} disabled={isSaving}>
+                                Cancel
+                            </Button>
+                        )}
+                        <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={handleReset} 
+                            disabled={!hasChanges || isSaving}
+                        >
+                            <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                            Reset
+                        </Button>
+                        <Button 
+                            size="sm"
+                            onClick={handleSave} 
+                            disabled={!hasChanges || isSaving || isLoading}
+                            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                        >
+                            {isSaving ? (
+                                <>
+                                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="h-3.5 w-3.5 mr-1.5" />
+                                    Save Changes
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {/* Critical missing fields alert */}
@@ -255,8 +286,8 @@ export function CVEditor({
             )}
 
             {/* Main editor with tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid grid-cols-7 w-full h-auto p-1">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+                <TabsList className="grid grid-cols-8 w-full h-auto p-1 shrink-0">
                     {SECTIONS.map(section => {
                         const sectionValidation = validation.sections.find(s => s.id === section.id)
                         return (
@@ -277,10 +308,10 @@ export function CVEditor({
                     })}
                 </TabsList>
 
-                <Card className="mt-4">
+                <Card className="mt-3 flex-1 flex flex-col min-h-0 overflow-hidden">
                     {/* Section-specific guidance */}
                     {activeSectionValidation && activeSectionValidation.missingFields.length > 0 && (
-                        <div className="border-b px-4 py-3 bg-muted/30">
+                        <div className="border-b px-4 py-2 bg-muted/30 shrink-0">
                             <div className="flex items-start gap-2 text-sm">
                                 {activeSectionValidation.missingFields.some(f => f.severity === 'error') ? (
                                     <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
@@ -298,8 +329,8 @@ export function CVEditor({
                         </div>
                     )}
 
-                    <ScrollArea className={compact ? "h-[400px]" : "h-[500px]"}>
-                        <CardContent className="pt-6">
+                    <ScrollArea className="flex-1">
+                        <CardContent className="py-6">
                             <TabsContent value="personal" className="mt-0">
                                 <PersonalInfoSection
                                     name={formData.name || ''}
@@ -317,9 +348,16 @@ export function CVEditor({
                             <TabsContent value="experience" className="mt-0">
                                 <ExperienceSection
                                     experiences={formData.experience || []}
-                                    leadership={formData.leadership || []}
                                     onChange={(experiences) => updateField('experience', experiences)}
-                                    onLeadershipChange={(leadership) => updateField('leadership', leadership)}
+                                    readOnly={readOnly}
+                                    validation={validation}
+                                />
+                            </TabsContent>
+
+                            <TabsContent value="leadership" className="mt-0">
+                                <LeadershipSection
+                                    leadership={formData.leadership || []}
+                                    onChange={(leadership: LeadershipEntry[]) => updateField('leadership', leadership)}
                                     readOnly={readOnly}
                                     validation={validation}
                                 />
@@ -377,68 +415,6 @@ export function CVEditor({
                     </ScrollArea>
                 </Card>
             </Tabs>
-
-            {/* Recommendations */}
-            {showValidationAlerts && validation.recommendations.length > 0 && !dismissedAlerts.has('recommendations') && (
-                <Alert className="relative">
-                    <Info className="h-4 w-4" />
-                    <AlertTitle>Suggestions</AlertTitle>
-                    <AlertDescription>
-                        <ul className="list-disc list-inside">
-                            {validation.recommendations.map((rec, i) => (
-                                <li key={i}>{rec}</li>
-                            ))}
-                        </ul>
-                    </AlertDescription>
-                    <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="absolute top-2 right-2 h-6 w-6"
-                        onClick={() => dismissAlert('recommendations')}
-                    >
-                        <X className="h-4 w-4" />
-                    </Button>
-                </Alert>
-            )}
-
-            {/* Action buttons */}
-            {!readOnly && (
-                <div className="flex items-center justify-between pt-4 border-t">
-                    <div className="flex items-center gap-2">
-                        {onCancel && (
-                            <Button variant="ghost" onClick={onCancel} disabled={isSaving}>
-                                <X className="h-4 w-4 mr-2" />
-                                Cancel
-                            </Button>
-                        )}
-                        <Button 
-                            variant="outline" 
-                            onClick={handleReset} 
-                            disabled={!hasChanges || isSaving}
-                        >
-                            <RotateCcw className="h-4 w-4 mr-2" />
-                            Reset
-                        </Button>
-                    </div>
-
-                    <Button 
-                        onClick={handleSave} 
-                        disabled={!hasChanges || isSaving || isLoading}
-                    >
-                        {isSaving ? (
-                            <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Saving...
-                            </>
-                        ) : (
-                            <>
-                                <Save className="h-4 w-4 mr-2" />
-                                Save Changes
-                            </>
-                        )}
-                    </Button>
-                </div>
-            )}
         </div>
     )
 }

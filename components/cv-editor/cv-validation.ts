@@ -1,4 +1,4 @@
-import type { ExtractedCVInfo, ContactInfo, ExperienceEntry, EducationEntry } from "@/lib/api-client"
+import type { ExtractedCVInfo, ContactInfo, ExperienceEntry, EducationEntry, LeadershipEntry, SeniorityLevel } from "@/lib/api-client"
 
 export interface FieldValidation {
     field: string
@@ -200,6 +200,42 @@ function validateSkills(skills: string[] | undefined): FieldValidation[] {
     return validations
 }
 
+function validateLeadership(leadership: LeadershipEntry[] | undefined, seniorityLevel?: SeniorityLevel): FieldValidation[] {
+    const validations: FieldValidation[] = []
+
+    const isSenior = seniorityLevel === 'lead' || seniorityLevel === 'principal' || seniorityLevel === 'director' || seniorityLevel === 'executive'
+
+    if (isSenior) {
+        if (!leadership || leadership.length === 0) {
+            validations.push({
+                field: 'leadership',
+                label: 'Leadership',
+                section: 'leadership',
+                isRequired: false,
+                isMissing: true,
+                severity: 'warning',
+                message: 'Add leadership roles to strengthen senior/lead profile'
+            })
+            return validations
+        }
+
+        const entriesWithoutHighlights = leadership.filter(l => !l.highlights || l.highlights.length === 0)
+        if (entriesWithoutHighlights.length > 0) {
+            validations.push({
+                field: 'leadership.highlights',
+                label: 'Leadership Highlights',
+                section: 'leadership',
+                isRequired: false,
+                isMissing: true,
+                severity: 'info',
+                message: `${entriesWithoutHighlights.length} leadership ${entriesWithoutHighlights.length === 1 ? 'entry lacks' : 'entries lack'} impact highlights`
+            })
+        }
+    }
+
+    return validations
+}
+
 export function validateCV(data: ExtractedCVInfo): CVValidationResult {
     const allValidations: FieldValidation[] = []
 
@@ -245,6 +281,9 @@ export function validateCV(data: ExtractedCVInfo): CVValidationResult {
 
     // Experience Validation
     allValidations.push(...validateExperience(data.experience))
+
+    // Leadership Validation (contextual for senior roles)
+    allValidations.push(...validateLeadership(data.leadership, data.seniorityLevel))
 
     // Education Validation
     allValidations.push(...validateEducation(data.education))
@@ -295,6 +334,7 @@ export function validateCV(data: ExtractedCVInfo): CVValidationResult {
     const sections: SectionValidation[] = [
         calculateSectionValidation('personal', 'Personal Info', allValidations, ['name', 'contactInfo', 'summary', 'seniorityLevel']),
         calculateSectionValidation('experience', 'Experience', allValidations, ['experience']),
+        calculateSectionValidation('leadership', 'Leadership', allValidations, ['leadership']),
         calculateSectionValidation('education', 'Education', allValidations, ['education']),
         calculateSectionValidation('skills', 'Skills', allValidations, ['skills']),
         calculateSectionValidation('projects', 'Projects', allValidations, ['projects']),

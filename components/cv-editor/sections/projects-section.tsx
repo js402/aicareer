@@ -236,7 +236,7 @@ export function ProjectsSection({
                                                 value={project.description || ''}
                                                 onChange={(e) => updateProject(index, 'description', e.target.value)}
                                                 placeholder="Describe what the project does, your role, and key achievements..."
-                                                className="min-h-[100px]"
+                                                className="min-h-[120px] text-base leading-relaxed"
                                                 disabled={readOnly}
                                             />
                                         </div>

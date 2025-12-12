@@ -4,14 +4,13 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ArrowLeft, FileText, Plus } from "lucide-react"
 import { useCVStore } from "@/hooks/useCVStore"
 import { Navbar } from "@/components/navbar"
 import { supabase } from "@/lib/supabase"
 import { useSubscription } from "@/hooks/useSubscription"
 import { useCVMetadataList } from "@/hooks/useCVMetadata"
-import { CVMetadataEditForm } from "@/components/cv-metadata-edit-form"
+import { CVEditorModal } from "@/components/cv-editor"
 import { PageLoader } from "@/components/ui/loading-spinner"
 import { StatusAlert } from "@/components/ui/status-alert"
 import { useModalState } from "@/hooks/useModalState"
@@ -267,6 +266,20 @@ export default function CVMetadataPage() {
                             />
                         ))}
                     </div>
+                )}
+
+                {/* Edit CV Modal */}
+                {editModal.item && (
+                    <CVEditorModal
+                        open={editModal.isOpen}
+                        onOpenChange={(open) => !open && editModal.close()}
+                        initialData={editModal.item.extracted_info}
+                        onSave={handleEditSave}
+                        title="Edit CV"
+                        description="Update your CV information and professional profile"
+                        variant="sheet"
+                        side="right"
+                    />
                 )}
             </main>
         </div>

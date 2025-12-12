@@ -70,12 +70,14 @@ export function CVEditorModal({
     if (variant === 'sheet') {
         return (
             <Sheet open={open} onOpenChange={onOpenChange}>
-                <SheetContent side={side} className="w-full sm:max-w-2xl overflow-y-auto">
-                    <SheetHeader className="mb-4">
-                        <SheetTitle>{title}</SheetTitle>
+                <SheetContent side={side} className="w-full sm:max-w-3xl lg:max-w-4xl p-0 flex flex-col h-full">
+                    <SheetHeader className="px-6 py-4 border-b shrink-0">
+                        <SheetTitle className="text-xl">{title}</SheetTitle>
                         <SheetDescription>{description}</SheetDescription>
                     </SheetHeader>
-                    {editorContent}
+                    <div className="flex-1 overflow-y-auto px-6 py-4">
+                        {editorContent}
+                    </div>
                 </SheetContent>
             </Sheet>
         )
