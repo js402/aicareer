@@ -102,6 +102,11 @@ export interface CVMetadataResponse {
     confidence_score: number
     created_at: string
     updated_at: string
+    display_name?: string
+    file_name?: string
+    cv_content?: string
+    source_cv_id?: string
+    source_type?: 'uploaded' | 'tailored'
 }
 
 export interface ExtractMetadataResponse {

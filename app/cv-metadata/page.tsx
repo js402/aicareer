@@ -16,6 +16,8 @@ import { StatusAlert } from "@/components/ui/status-alert"
 import { useModalState } from "@/hooks/useModalState"
 import { useLoadingState } from "@/hooks/useLoadingState"
 import { CVMetadataCard } from "@/components/cv-metadata/cv-metadata-card"
+import { CVViewModal } from "@/components/positions/CVViewModal"
+import { downloadMarkdown } from "@/lib/download-helpers"
 import type { CVMetadataResponse, ExtractedCVInfo } from "@/lib/api-client"
 
 export default function CVMetadataPage() {
@@ -28,6 +30,10 @@ export default function CVMetadataPage() {
     const editModal = useModalState<CVMetadataResponse>()
     const [isDeleting, setIsDeleting] = useState<string | null>(null)
     const [loadingAnalysisHash, setLoadingAnalysisHash] = useState<string | null>(null)
+    
+    // View modal state - uses CVMetadataResponse directly
+    const [viewingCV, setViewingCV] = useState<CVMetadataResponse | null>(null)
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false)
 
     const { data: listResponse, isLoading: listLoading, error: listError, refetch } = useCVMetadataList()
     const loadMetadata = useCallback(async () => {
@@ -149,6 +155,33 @@ export default function CVMetadataPage() {
         }
     }
 
+    const handleViewContent = (item: CVMetadataResponse) => {
+        if (item.cv_content) {
+            setViewingCV(item)
+            setIsViewModalOpen(true)
+        } else {
+            loadingState.setError('No content available for this CV.')
+        }
+    }
+
+    const handleDownload = (item: CVMetadataResponse) => {
+        if (item.cv_content) {
+            const displayName = item.display_name || item.extracted_info?.name || 'CV'
+            const safeName = displayName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+            const filename = `${safeName}.md`
+            downloadMarkdown(item.cv_content, filename, true)
+        } else {
+            loadingState.setError('No content available for download.')
+        }
+    }
+
+    const handleDownloadFromModal = async (cvId: string, version: number) => {
+        const item = metadata.find(m => m.id === cvId)
+        if (item) {
+            handleDownload(item)
+        }
+    }
+
     if (isLoading) {
         return <PageLoader message="Loading your CV metadata..." />
     }
@@ -242,6 +275,8 @@ export default function CVMetadataPage() {
                                 onEdit={handleEdit}
                                 onDelete={handleDelete}
                                 onLoadAnalysis={handleLoadAnalysis}
+                                onViewContent={handleViewContent}
+                                onDownload={handleDownload}
                                 onRename={async (id: string, name: string) => {
                                     try {
                                         const response = await fetch(`/api/cv-metadata/${id}/rename`, {
@@ -275,6 +310,31 @@ export default function CVMetadataPage() {
                         description="Update your CV information and professional profile"
                         variant="sheet"
                         side="right"
+                    />
+                )}
+
+                {/* View CV Modal */}
+                {viewingCV && (
+                    <CVViewModal
+                        isOpen={isViewModalOpen}
+                        onClose={() => {
+                            setIsViewModalOpen(false)
+                            setViewingCV(null)
+                        }}
+                        cv={{
+                            id: viewingCV.id,
+                            version: 1,
+                            tailored_content: viewingCV.cv_content
+                        }}
+                        companyName={viewingCV.display_name || undefined}
+                        positionTitle={viewingCV.extracted_info?.name || undefined}
+                        onDownload={async () => {
+                            if (viewingCV.cv_content) {
+                                const displayName = viewingCV.display_name || viewingCV.extracted_info?.name || 'CV'
+                                const safeName = displayName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+                                downloadMarkdown(viewingCV.cv_content, `${safeName}.md`, true)
+                            }
+                        }}
                     />
                 )}
             </main>

@@ -5,12 +5,10 @@ import { useRouter } from 'next/navigation'
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Sparkles, Loader2, RefreshCw } from "lucide-react"
+import { Sparkles, Loader2, RefreshCw, ExternalLink } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PositionHeader } from "@/components/positions/PositionHeader"
-import { TailoredCVList } from "@/components/positions/TailoredCVList"
-import { CVViewModal } from "@/components/positions/CVViewModal"
 import { NotesCard } from "@/components/positions/NotesCard"
 import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { MatchScoreCircle } from "@/components/analysis/match-score-circle"
@@ -21,7 +19,6 @@ import { useCVStore } from "@/hooks/useCVStore"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-import { downloadMarkdown } from "@/lib/download-helpers"
 import {
     AlertDialog,
     AlertDialogAction,
@@ -41,14 +38,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-
-interface TailoredCV {
-    id: string
-    version: number
-    is_active: boolean
-    created_at: string
-    tailored_content?: string // Fetched on demand or if included
-}
 
 interface Position {
     id: string
@@ -70,7 +59,6 @@ interface Position {
     applied_date?: string
     notes?: string
     created_at: string
-    tailored_cvs: TailoredCV[]
     cv_metadata_id?: string // The CV used to generate this position's match analysis
 }
 
@@ -96,10 +84,6 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     const [notes, setNotes] = useState('')
     const [isGenerating, setIsGenerating] = useState(false)
 
-    // View Modal State
-    const [viewingCV, setViewingCV] = useState<TailoredCV | null>(null)
-    const [isViewModalOpen, setIsViewModalOpen] = useState(false)
-
     // Delete Confirmation Dialog State
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
@@ -108,9 +92,11 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     const [selectedNewCvId, setSelectedNewCvId] = useState<string>('')
     const [isReanalyzing, setIsReanalyzing] = useState(false)
 
-    // Fetch CV list for re-analyze dropdown
+    // Fetch CV list for re-analyze dropdown and tailored CV generation
     const { data: cvResponse } = useFetch<CVMetadataResponse>('/api/cv-metadata', { skip: authLoading })
     const cvList = cvResponse?.metadata || []
+    // Filter to only show uploaded CVs (not tailored ones)
+    const uploadedCvList = cvList.filter(cv => !(cv as any).source_type || (cv as any).source_type === 'uploaded')
 
     // Fetch position - skip while auth is loading (redirect will happen if not authenticated)
     const { data: position, isLoading: positionLoading, error: fetchError, refetch } = useFetch<Position>(
@@ -139,31 +125,10 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     )
 
     // Mutation for generating tailored CV
-    const { mutate: tailorCV, isLoading: isTailoring } = useMutation<any, { tailoredCV: string }>(
+    const { mutate: tailorCV, isLoading: isTailoring } = useMutation<any, { tailoredCV: string; cvMetadata?: any }>(
         '/api/tailor-cv',
         'POST'
     )
-
-    // Mutation for saving tailored CV
-    const { mutate: saveTailoredCV } = useMutation<any, any>(
-        '/api/tailored-cvs',
-        'POST'
-    )
-
-    // Mutation for marking CV as submitted
-    const { mutate: markSubmitted } = useMutation<any, Position>(
-        `/api/job-positions/${id}`,
-        'PATCH'
-    )
-
-    // Helper to fetch tailored CV content
-    const fetchTailoredCVContent = async (cvId: string): Promise<TailoredCV | null> => {
-        const response = await fetch(`/api/tailored-cvs/${cvId}`)
-        if (response.ok) {
-            return response.json()
-        }
-        return null
-    }
 
     const handleStatusChange = useCallback(async (newStatus: string) => {
         if (!position) return
@@ -269,10 +234,13 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
         try {
             setIsGenerating(true)
 
-            // 1. Generate tailored content
-            const tailorResult = await tailorCV({
+            // Generate tailored CV - it will be saved automatically to cv_metadata
+            await tailorCV({
                 cvMetadataId,
                 jobDescription: position.job_description,
+                jobPositionId: position.id,
+                companyName: position.company_name,
+                positionTitle: position.position_title,
                 matchAnalysis: {
                     matchScore: position.match_score,
                     matchingSkills: position.matching_skills,
@@ -281,70 +249,13 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
                 }
             })
 
-            // 2. Save tailored CV
-            await saveTailoredCV({
-                job_position_id: position.id,
-                cv_metadata_id: cvMetadataId,
-                tailored_content: tailorResult.tailoredCV
-            })
-
-            await refetch()
+            // Show success message and offer to view in CVs page
+            alert('Tailored CV generated successfully! You can view and download it from the "My CVs" page.')
         } catch (error) {
             console.error('Error generating tailored CV:', error)
             alert('Failed to generate tailored CV. Please try again.')
         } finally {
             setIsGenerating(false)
-        }
-    }
-
-    const handleDownloadCV = async (cvId: string, version: number) => {
-        try {
-            const data = await fetchTailoredCVContent(cvId)
-            if (data?.tailored_content) {
-                // Sanitize filename
-                const safeCompanyName = position?.company_name.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'company'
-                const safePositionTitle = position?.position_title.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'position'
-                const filename = `${safeCompanyName}_${safePositionTitle}_cv_v${version}.md`
-
-                // Use download helper with cleaning
-                downloadMarkdown(data.tailored_content, filename, true)
-            }
-        } catch (error) {
-            console.error('Error downloading CV:', error)
-        }
-    }
-
-    const handleViewCV = async (cv: TailoredCV) => {
-        try {
-            // If content is not loaded, fetch it
-            let content = cv.tailored_content
-            if (!content) {
-                const data = await fetchTailoredCVContent(cv.id)
-                content = data?.tailored_content
-
-            }
-
-            if (content) {
-                setViewingCV({ ...cv, tailored_content: content })
-                setIsViewModalOpen(true)
-            }
-        } catch (error) {
-            console.error('Error viewing CV:', error)
-        }
-    }
-
-    const handleMarkAsSubmitted = async (cvId: string) => {
-        if (!position) return
-
-        try {
-            await markSubmitted({ 
-                submitted_cv_id: cvId, 
-                status: 'applied', 
-                applied_date: new Date().toISOString() 
-            })
-            await refetch()
-        } catch (error) {
-            console.error('Error marking CV as submitted:', error)
         }
     }
 
@@ -380,11 +291,6 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     }
 
     if (!position) return null
-
-    // Helper to check if a CV is the submitted one
-    // We cast position to any here because we haven't updated the interface yet in this file
-    // In a real scenario, we should update the Position interface
-    const submittedCvId = (position as any).submitted_cv_id
 
     return (
         <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
@@ -497,16 +403,42 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
 
                     {/* Sidebar */}
                     <div className="space-y-6">
-                        <TailoredCVList
-                            cvs={position.tailored_cvs}
-                            submittedCvId={submittedCvId}
-                            isGenerating={isGenerating}
-                            canGenerate={!!(position.cv_metadata_id || storeCvMetadataId)}
-                            onGenerate={handleGenerateCV}
-                            onView={handleViewCV}
-                            onDownload={handleDownloadCV}
-                            onMarkAsSubmitted={handleMarkAsSubmitted}
-                        />
+                        {/* Generate Tailored CV Card */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-lg">Tailored CV</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-sm text-muted-foreground">
+                                    Generate a CV tailored specifically for this position based on your skills and the job requirements.
+                                </p>
+                                <Button
+                                    className="w-full bg-purple-600 hover:bg-purple-700"
+                                    onClick={handleGenerateCV}
+                                    disabled={isGenerating || !(position.cv_metadata_id || storeCvMetadataId)}
+                                >
+                                    {isGenerating ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Generating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Sparkles className="mr-2 h-4 w-4" />
+                                            Generate Tailored CV
+                                        </>
+                                    )}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => router.push('/cv-metadata')}
+                                >
+                                    <ExternalLink className="mr-2 h-4 w-4" />
+                                    View My CVs
+                                </Button>
+                            </CardContent>
+                        </Card>
 
                         <NotesCard
                             notes={notes}
@@ -517,22 +449,12 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
                     </div>
                 </div>
 
-                <CVViewModal
-                    cv={viewingCV}
-                    isOpen={isViewModalOpen}
-                    companyName={position.company_name}
-                    positionTitle={position.position_title}
-                    onClose={() => setIsViewModalOpen(false)}
-                    onDownload={handleDownloadCV}
-                />
-
                 <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                     <AlertDialogContent>
                         <AlertDialogHeader>
                             <AlertDialogTitle>Delete Job Position</AlertDialogTitle>
                             <AlertDialogDescription>
-                                Are you sure you want to delete this position? This will permanently delete
-                                the job position and all associated tailored CVs. This action cannot be undone.
+                                Are you sure you want to delete this position? This action cannot be undone.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>

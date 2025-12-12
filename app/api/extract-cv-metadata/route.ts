@@ -58,7 +58,8 @@ export const POST = withAuth(async (request, { supabase, user }) => {
                         cvHash,
                         validation.extractedInfo,
                         'partial',
-                        0.5 // Lower confidence for incomplete data
+                        0.5, // Lower confidence for incomplete data
+                        { cvContent }
                     )
                 } catch (cacheError) {
                     console.warn('Failed to cache partial metadata:', cacheError)
@@ -96,7 +97,8 @@ export const POST = withAuth(async (request, { supabase, user }) => {
                 cvHash,
                 validation.extractedInfo,
                 extractionStatus,
-                0.8 // Default confidence score, could be improved with ML model
+                0.8, // Default confidence score, could be improved with ML model
+                { cvContent }
             )
         } catch (cacheError) {
             console.warn('Failed to cache metadata:', cacheError)

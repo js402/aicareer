@@ -28,9 +28,16 @@ export async function storeCVMetadata(
     cvHash: string,
     extractedInfo: ExtractedCVInfo,
     extractionStatus: 'completed' | 'partial' | 'failed' = 'completed',
-    confidenceScore?: number
+    confidenceScore?: number,
+    options?: {
+        cvContent?: string
+        sourceType?: 'uploaded' | 'tailored'
+        sourceCvId?: string
+        jobPositionId?: string
+        displayName?: string
+    }
 ) {
-    const autoName = (() => {
+    const autoName = options?.displayName || (() => {
         const dateStr = new Date().toISOString().slice(0, 10)
         const summary = (extractedInfo as any)?.summary || ''
         const topRole = (extractedInfo as any)?.primaryFunctions?.[0] || ''
@@ -46,6 +53,10 @@ export async function storeCVMetadata(
             extraction_status: extractionStatus,
             confidence_score: confidenceScore,
             display_name: autoName,
+            cv_content: options?.cvContent,
+            source_type: options?.sourceType || 'uploaded',
+            source_cv_id: options?.sourceCvId,
+            job_position_id: options?.jobPositionId,
         })
         .select()
         .single()

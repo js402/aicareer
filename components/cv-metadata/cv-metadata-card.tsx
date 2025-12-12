@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Edit, Trash2, FileText, User, Briefcase, GraduationCap, Award, Calendar, Sparkles, Loader2 } from "lucide-react"
+import { Edit, Trash2, FileText, User, Briefcase, GraduationCap, Award, Calendar, Sparkles, Loader2, Eye, Download } from "lucide-react"
 import type { CVMetadataResponse } from "@/lib/api-client"
 import { useState } from "react"
 
@@ -15,6 +15,8 @@ interface CVMetadataCardProps {
   onDelete: (id: string) => void
   onLoadAnalysis: (item: CVMetadataResponse) => void
   onRename: (id: string, name: string) => Promise<void>
+  onViewContent?: (item: CVMetadataResponse) => void
+  onDownload?: (item: CVMetadataResponse) => void
 }
 
 const getStatusColor = (status: string) => {
@@ -33,7 +35,9 @@ export function CVMetadataCard({
   onEdit,
   onDelete,
   onLoadAnalysis,
-  onRename
+  onRename,
+  onViewContent,
+  onDownload
 }: CVMetadataCardProps) {
   const [displayName, setDisplayName] = useState((item as any).display_name || '')
 
@@ -52,23 +56,33 @@ export function CVMetadataCard({
   const extractedInfo = item.extracted_info
   const seniorityLevel = extractedInfo.seniorityLevel || 'professional'
   const yearsExp = extractedInfo.yearsOfExperience
+  const isTailored = (item as any).source_type === 'tailored'
 
   return (
     <Card className="group relative overflow-hidden border-slate-200 dark:border-slate-800 hover:border-purple-300 dark:hover:border-purple-800 transition-all duration-300 hover:shadow-lg">
-      {/* Top accent bar */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-indigo-500" />
+      {/* Top accent bar - different color for tailored CVs */}
+      <div className={`absolute top-0 left-0 right-0 h-1 ${isTailored 
+        ? 'bg-gradient-to-r from-emerald-500 to-teal-500' 
+        : 'bg-gradient-to-r from-purple-500 to-indigo-500'}`} />
       
       <CardContent className="p-6 pt-8">
         {/* Header */}
         <div className="flex items-start gap-4 mb-6">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30">
-            <FileText className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          <div className={`p-3 rounded-xl ${isTailored 
+            ? 'bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30' 
+            : 'bg-gradient-to-br from-purple-100 to-indigo-100 dark:from-purple-900/30 dark:to-indigo-900/30'}`}>
+            <FileText className={`h-6 w-6 ${isTailored ? 'text-emerald-600 dark:text-emerald-400' : 'text-purple-600 dark:text-purple-400'}`} />
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100 truncate">
               {extractedInfo.name || 'Unnamed CV'}
             </h3>
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              {isTailored && (
+                <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300 text-xs font-medium">
+                  Tailored
+                </Badge>
+              )}
               <Badge className={`${getStatusColor(item.extraction_status)} text-xs font-medium`}>
                 {item.extraction_status}
               </Badge>
@@ -142,23 +156,52 @@ export function CVMetadataCard({
 
         {/* Actions */}
         <div className="space-y-3">
-          <Button
-            className="w-full h-11 bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all"
-            onClick={() => onLoadAnalysis(item)}
-            disabled={isLoadingAnalysis}
-          >
-            {isLoadingAnalysis ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4 mr-2" />
-                View Analysis
-              </>
-            )}
-          </Button>
+          {/* View Content and Download - only for tailored CVs or CVs with content */}
+          {(isTailored || (item as any).cv_content) && (
+            <div className="flex gap-2">
+              {onViewContent && (
+                <Button
+                  variant="outline"
+                  className="flex-1 h-10"
+                  onClick={() => onViewContent(item)}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  View
+                </Button>
+              )}
+              {onDownload && (
+                <Button
+                  variant="outline"
+                  className="flex-1 h-10"
+                  onClick={() => onDownload(item)}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Analysis button - only for uploaded CVs */}
+          {!isTailored && (
+            <Button
+              className="w-full h-11 bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-md hover:shadow-lg transition-all"
+              onClick={() => onLoadAnalysis(item)}
+              disabled={isLoadingAnalysis}
+            >
+              {isLoadingAnalysis ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  View Analysis
+                </>
+              )}
+            </Button>
+          )}
 
           <div className="flex gap-3">
             <Button

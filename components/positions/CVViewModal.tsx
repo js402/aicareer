@@ -231,55 +231,110 @@ export function CVViewModal({
                     {/* Preview Area */}
                     <div
                         className={cn(
-                            "flex-1 overflow-y-auto",
+                            "flex-1 overflow-y-auto bg-slate-100 dark:bg-slate-950",
                             showSettings ? "md:border-l dark:border-slate-800" : ""
                         )}
                         ref={previewRef}
                     >
-                        <div className="p-4 md:p-6 lg:p-8 h-full flex items-center justify-center">
+                        <div className="p-4 md:p-6 lg:p-8 h-full flex items-start justify-center">
                             <div
                                 key={settingsKey}
                                 className={cn(
                                     "bg-white dark:bg-slate-900 shadow-lg transition-all duration-200",
-                                    "print:shadow-none",
+                                    "print:shadow-none w-full",
                                     isFullscreen
-                                        ? "max-w-[210mm] w-full min-h-[calc(100vh-8rem)]"
-                                        : "max-w-[210mm] min-h-[297mm]"
+                                        ? "max-w-[210mm]"
+                                        : "max-w-[210mm]"
                                 )}
                                 style={{
                                     padding: styles.contentPadding,
                                     fontSize: styles.bodySize,
-                                    lineHeight: styles.lineHeight
+                                    lineHeight: styles.lineHeight,
+                                    minHeight: '297mm'
                                 }}
                             >
                                 <div
                                     id="cv-preview-content"
-                                    className="prose dark:prose-invert max-w-none"
+                                    className="max-w-none"
                                 >
                                     <style>{`
+                                        #cv-preview-content {
+                                            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                                            font-size: ${styles.bodySize} !important;
+                                            line-height: ${styles.lineHeight} !important;
+                                            color: #1a1a1a;
+                                        }
                                         #cv-preview-content h1 {
                                             font-size: ${styles.h1Size} !important;
-                                            line-height: 1.2 !important;
+                                            line-height: 1.1 !important;
+                                            text-align: center;
+                                            margin-bottom: 0.2em !important;
+                                            margin-top: 0 !important;
+                                            font-weight: 700;
+                                            color: #111;
+                                        }
+                                        #cv-preview-content h1 + p {
+                                            text-align: center !important;
+                                            color: #444 !important;
+                                            font-size: calc(${styles.bodySize} * 0.95) !important;
+                                            margin-bottom: 0.6em !important;
                                         }
                                         #cv-preview-content h2 {
                                             font-size: ${styles.h2Size} !important;
                                             margin-top: ${styles.h2MarginTop} !important;
-                                            line-height: 1.3 !important;
+                                            margin-bottom: 0.3em !important;
+                                            line-height: 1.2 !important;
+                                            font-weight: 700;
+                                            text-transform: uppercase;
+                                            letter-spacing: 0.03em;
+                                            border-bottom: 1.5px solid #333;
+                                            padding-bottom: 0.15em;
+                                            color: #111;
                                         }
                                         #cv-preview-content h3 {
                                             font-size: ${styles.h3Size} !important;
                                             margin-top: ${styles.h3MarginTop} !important;
-                                            line-height: 1.4 !important;
+                                            margin-bottom: 0.15em !important;
+                                            line-height: 1.25 !important;
+                                            font-weight: 600;
+                                            color: #222;
                                         }
                                         #cv-preview-content p {
                                             margin-bottom: ${styles.pMarginBottom} !important;
+                                            margin-top: 0 !important;
+                                            color: #333;
+                                        }
+                                        #cv-preview-content ul {
+                                            list-style: none !important;
+                                            padding-left: 0 !important;
+                                            margin: 0.2em 0 0.4em 0 !important;
                                         }
                                         #cv-preview-content li {
                                             margin-bottom: ${styles.liMarginBottom} !important;
+                                            padding-left: 1em !important;
+                                            position: relative;
+                                            color: #333;
                                         }
-                                        #cv-preview-content {
-                                            font-size: ${styles.bodySize} !important;
-                                            line-height: ${styles.lineHeight} !important;
+                                        #cv-preview-content li::before {
+                                            content: "•";
+                                            position: absolute;
+                                            left: 0;
+                                            color: #555;
+                                        }
+                                        #cv-preview-content strong {
+                                            font-weight: 600;
+                                            color: #111;
+                                        }
+                                        #cv-preview-content em {
+                                            font-style: italic;
+                                            color: #555;
+                                        }
+                                        #cv-preview-content a {
+                                            color: #0066cc;
+                                            text-decoration: none;
+                                        }
+                                        #cv-preview-content hr {
+                                            display: none;
                                         }
                                     `}</style>
                                     {cv.tailored_content ? (

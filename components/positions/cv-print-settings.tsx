@@ -53,9 +53,10 @@ export function CVPrintSettings({ onSettingsChange }: CVPrintSettingsProps) {
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="compact">Compact (Fits more)</SelectItem>
-                            <SelectItem value="standard">Standard</SelectItem>
-                            <SelectItem value="large">Large (More readable)</SelectItem>
+                            <SelectItem value="ultra-compact">Ultra Compact (8pt)</SelectItem>
+                            <SelectItem value="compact">Compact (9pt)</SelectItem>
+                            <SelectItem value="standard">Standard (10pt)</SelectItem>
+                            <SelectItem value="large">Large (11pt)</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -73,9 +74,31 @@ export function CVPrintSettings({ onSettingsChange }: CVPrintSettingsProps) {
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="tight">Tight (Fits more)</SelectItem>
+                            <SelectItem value="minimal">Minimal (0.5cm)</SelectItem>
+                            <SelectItem value="tight">Tight (0.75cm)</SelectItem>
+                            <SelectItem value="normal">Normal (1cm)</SelectItem>
+                            <SelectItem value="comfortable">Comfortable (1.5cm)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                {/* Section Spacing */}
+                <div className="space-y-1.5">
+                    <Label htmlFor="section-spacing" className="text-xs font-medium">
+                        Section Spacing
+                    </Label>
+                    <Select
+                        value={settings.sectionSpacing}
+                        onValueChange={(value: SectionSpacing) => handleChange('sectionSpacing', value)}
+                    >
+                        <SelectTrigger id="section-spacing" className="h-9">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="minimal">Minimal</SelectItem>
+                            <SelectItem value="tight">Tight</SelectItem>
                             <SelectItem value="normal">Normal</SelectItem>
-                            <SelectItem value="comfortable">Comfortable</SelectItem>
+                            <SelectItem value="relaxed">Relaxed</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -87,7 +110,7 @@ export function CVPrintSettings({ onSettingsChange }: CVPrintSettingsProps) {
                     onClick={() => setShowAdvanced(!showAdvanced)}
                     className="w-full justify-between h-8 text-xs font-normal"
                 >
-                    Advanced Options
+                    Line Height
                     {showAdvanced ? (
                         <ChevronUp className="h-3 w-3" />
                     ) : (
@@ -105,46 +128,29 @@ export function CVPrintSettings({ onSettingsChange }: CVPrintSettingsProps) {
                                     Line Height
                                 </Label>
                                 <span className="text-xs text-muted-foreground">
-                                    {settings.lineHeight.toFixed(1)}
+                                    {settings.lineHeight.toFixed(2)}
                                 </span>
                             </div>
                             <Slider
                                 id="line-height"
-                                min={1.2}
-                                max={1.8}
-                                step={0.1}
+                                min={1.1}
+                                max={1.6}
+                                step={0.05}
                                 value={[settings.lineHeight]}
                                 onValueChange={([value]: number[]) => handleChange('lineHeight', value)}
                                 className="w-full"
                             />
                         </div>
-
-                        {/* Section Spacing */}
-                        <div className="space-y-1.5">
-                            <Label htmlFor="section-spacing" className="text-xs font-medium">
-                                Section Spacing
-                            </Label>
-                            <Select
-                                value={settings.sectionSpacing}
-                                onValueChange={(value: SectionSpacing) => handleChange('sectionSpacing', value)}
-                            >
-                                <SelectTrigger id="section-spacing" className="h-9">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="tight">Tight</SelectItem>
-                                    <SelectItem value="normal">Normal</SelectItem>
-                                    <SelectItem value="relaxed">Relaxed</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
                     </div>
                 )}
             </div>
 
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1">
                 <p className="text-xs text-muted-foreground">
-                    💡 Use <strong>Compact + Tight</strong> to fit most CVs on 1-2 pages
+                    💡 <strong>Ultra Compact + Minimal + Minimal</strong> for maximum content
+                </p>
+                <p className="text-xs text-muted-foreground">
+                    📄 Use <strong>Print / PDF</strong> button to save as PDF
                 </p>
             </div>
         </div>

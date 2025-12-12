@@ -132,7 +132,10 @@ export const tailorCVSchema = z.object({
   jobDescription: nonEmptyString.max(10000, 'Job description is too long'),
   matchAnalysis: z.any().optional(), // Analysis from job match evaluation
   additionalInstructions: z.string().max(1000, 'Instructions are too long').optional(),
-  cvMetadataId: z.string().uuid('Valid CV metadata ID is required') // Required: specify which CV to tailor
+  cvMetadataId: z.string().uuid('Valid CV metadata ID is required'), // Required: specify which CV to tailor
+  jobPositionId: z.string().uuid().optional(), // Optional: link tailored CV to a job position
+  companyName: z.string().max(100).optional(), // Optional: company name for display
+  positionTitle: z.string().max(100).optional() // Optional: position title for display
 })
 
 // Job match evaluation schemas

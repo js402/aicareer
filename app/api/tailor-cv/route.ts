@@ -14,6 +14,7 @@ import {
 import { formatCVMetadataForTailoring, ExtractedCVInfo } from '@/lib/cv-formatter'
 import { errorResponse, handleOpenAIError, ValidationError } from '@/lib/api-errors'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import crypto from 'crypto'
 
 // ============================================================
 // STRUCTURED OUTPUT SCHEMA (matches ExtractedCVInfo)
@@ -286,7 +287,7 @@ export const POST = withProAccess(async (request: NextRequest, { supabase, user 
             )
         }
 
-        const { jobDescription, matchAnalysis, cvMetadataId } = validation.data
+        const { jobDescription, matchAnalysis, cvMetadataId, jobPositionId, companyName, positionTitle } = validation.data
 
         // Get user's specific CV metadata - cvMetadataId is required
         const { data: cvMetadata, error: cvError } = await supabase
@@ -351,15 +352,54 @@ Generate a tailored, quality-checked CV optimized for this job. Return valid JSO
         }
 
         // --------------------------------------------------------
-        // Generate Markdown version for backward compatibility
+        // Generate Markdown version
         // --------------------------------------------------------
         const tailoredCVMarkdown = generateMarkdownFromStructured(tailoredCV)
+
+        // --------------------------------------------------------
+        // Save tailored CV as new cv_metadata entry
+        // --------------------------------------------------------
+        // Generate a unique hash for this tailored CV
+        const tailoredCVHash = crypto
+            .createHash('sha256')
+            .update(JSON.stringify(tailoredCV) + Date.now())
+            .digest('hex')
+
+        // Create display name based on company/position info
+        const dateStr = new Date().toISOString().slice(0, 10)
+        const targetInfo = companyName || positionTitle || 'Tailored'
+        const displayName = `${tailoredCV.name || 'CV'} - ${targetInfo} - ${dateStr}`
+
+        // Save to cv_metadata table
+        const { data: savedMetadata, error: saveError } = await supabase
+            .from('cv_metadata')
+            .insert({
+                user_id: user.id,
+                cv_hash: tailoredCVHash,
+                extracted_info: tailoredCV,
+                extraction_status: 'completed',
+                confidence_score: 1.0,
+                display_name: displayName,
+                cv_content: tailoredCVMarkdown,
+                source_type: 'tailored',
+                source_cv_id: cvMetadataId,
+                job_position_id: jobPositionId || null
+            })
+            .select()
+            .single()
+
+        if (saveError) {
+            console.error('Error saving tailored CV to cv_metadata:', saveError)
+            // Don't fail the request, just log the error
+        }
 
         return NextResponse.json({
             // Structured output for CV editor
             tailoredCVData: tailoredCV,
-            // Markdown for backward compatibility and preview
+            // Markdown for preview
             tailoredCV: tailoredCVMarkdown,
+            // The new cv_metadata entry
+            cvMetadata: savedMetadata,
             // Validation status
             validationStatus: outputValidation.isValid ? 'passed' : 'warning',
             validationIssues: outputValidation.issues
@@ -382,93 +422,107 @@ Generate a tailored, quality-checked CV optimized for this job. Return valid JSO
 // ============================================================
 
 function generateMarkdownFromStructured(cv: TailoredCVOutput): string {
-    const sections: string[] = []
+    const lines: string[] = []
 
-    // Header
+    // Header - Name centered
     if (cv.name) {
-        sections.push(`# ${cv.name}`)
+        lines.push(`# ${cv.name}`)
     }
 
-    // Contact Info
+    // Contact Info - single line, pipe separated
     const contactParts: string[] = []
     if (cv.contactInfo?.email) contactParts.push(cv.contactInfo.email)
     if (cv.contactInfo?.phone) contactParts.push(cv.contactInfo.phone)
     if (cv.contactInfo?.location) contactParts.push(cv.contactInfo.location)
-    if (cv.contactInfo?.linkedin) contactParts.push(cv.contactInfo.linkedin)
-    if (cv.contactInfo?.github) contactParts.push(cv.contactInfo.github)
-    if (cv.contactInfo?.website) contactParts.push(cv.contactInfo.website)
+    if (cv.contactInfo?.linkedin) contactParts.push(`[LinkedIn](${cv.contactInfo.linkedin})`)
+    if (cv.contactInfo?.github) contactParts.push(`[GitHub](${cv.contactInfo.github})`)
+    if (cv.contactInfo?.website) contactParts.push(`[Portfolio](${cv.contactInfo.website})`)
 
     if (contactParts.length > 0) {
-        sections.push(contactParts.join(' | '))
+        lines.push(contactParts.join(' • '))
     }
 
-    // Summary
+    // Summary - compact, no extra line breaks
     if (cv.summary) {
-        sections.push(`## Professional Summary\n\n${cv.summary}`)
+        lines.push(`## Summary`)
+        lines.push(cv.summary)
     }
 
-    // Skills
+    // Skills - inline, comma separated
     if (cv.skills && cv.skills.length > 0) {
-        sections.push(`## Skills\n\n${cv.skills.join(', ')}`)
+        lines.push(`## Technical Skills`)
+        lines.push(`**${cv.skills.join(' • ')}**`)
     }
 
-    // Experience
+    // Experience - most important section
     if (cv.experience && cv.experience.length > 0) {
-        const expLines = cv.experience.map(exp => {
-            const header = `### ${exp.role} | ${exp.company}${exp.location ? ` | ${exp.location}` : ''}\n*${exp.duration}*`
-            const bullets = exp.highlights?.map(h => `- ${h}`).join('\n') || ''
-            return `${header}\n\n${bullets}`
-        }).join('\n\n')
-        sections.push(`## Experience\n\n${expLines}`)
-    }
-
-    // Projects
-    if (cv.projects && cv.projects.length > 0) {
-        const projLines = cv.projects.map(proj => {
-            const techStr = proj.technologies?.length > 0 ? ` | *${proj.technologies.join(', ')}*` : ''
-            return `### ${proj.name}${techStr}\n${proj.description}${proj.link ? `\n[Link](${proj.link})` : ''}`
-        }).join('\n\n')
-        sections.push(`## Projects\n\n${projLines}`)
-    }
-
-    // Leadership
-    if (cv.leadership && cv.leadership.length > 0) {
-        const leadLines = cv.leadership.map(lead => {
-            const header = `### ${lead.role} | ${lead.organization}\n*${lead.duration}*`
-            const desc = lead.description ? `\n${lead.description}` : ''
-            const bullets = lead.highlights?.map(h => `- ${h}`).join('\n') || ''
-            return `${header}${desc}\n\n${bullets}`
-        }).join('\n\n')
-        sections.push(`## Leadership\n\n${leadLines}`)
-    }
-
-    // Education
-    if (cv.education && cv.education.length > 0) {
-        const eduLines = cv.education.map(edu => {
-            let line = `### ${edu.degree} | ${edu.institution}`
-            if (edu.location) line += ` | ${edu.location}`
-            line += `\n*${edu.year}*`
-            if (edu.gpa) line += ` | GPA: ${edu.gpa}`
-            if (edu.coursework && edu.coursework.length > 0) {
-                line += `\n\n**Relevant Coursework:** ${edu.coursework.join(', ')}`
+        lines.push(`## Experience`)
+        cv.experience.forEach(exp => {
+            // Role and company on same line, duration inline
+            const locationPart = exp.location ? `, ${exp.location}` : ''
+            lines.push(`**${exp.role}** — ${exp.company}${locationPart} *(${exp.duration})*`)
+            // Bullets with no extra spacing
+            if (exp.highlights && exp.highlights.length > 0) {
+                exp.highlights.forEach(h => {
+                    lines.push(`- ${h}`)
+                })
             }
-            return line
-        }).join('\n\n')
-        sections.push(`## Education\n\n${eduLines}`)
+        })
     }
 
-    // Certifications
+    // Projects - if present and not too many
+    if (cv.projects && cv.projects.length > 0) {
+        lines.push(`## Projects`)
+        cv.projects.forEach(proj => {
+            const techStr = proj.technologies?.length > 0 ? ` *(${proj.technologies.join(', ')})*` : ''
+            lines.push(`**${proj.name}**${techStr}`)
+            lines.push(proj.description)
+        })
+    }
+
+    // Leadership - if present
+    if (cv.leadership && cv.leadership.length > 0) {
+        lines.push(`## Leadership`)
+        cv.leadership.forEach(lead => {
+            lines.push(`**${lead.role}** — ${lead.organization} *(${lead.duration})*`)
+            if (lead.description) {
+                lines.push(lead.description)
+            }
+            if (lead.highlights && lead.highlights.length > 0) {
+                lead.highlights.forEach(h => {
+                    lines.push(`- ${h}`)
+                })
+            }
+        })
+    }
+
+    // Education - compact
+    if (cv.education && cv.education.length > 0) {
+        lines.push(`## Education`)
+        cv.education.forEach(edu => {
+            const locationPart = edu.location ? `, ${edu.location}` : ''
+            const gpaPart = edu.gpa ? ` — GPA: ${edu.gpa}` : ''
+            lines.push(`**${edu.degree}** — ${edu.institution}${locationPart} *(${edu.year})*${gpaPart}`)
+            if (edu.coursework && edu.coursework.length > 0) {
+                lines.push(`Coursework: ${edu.coursework.join(', ')}`)
+            }
+        })
+    }
+
+    // Certifications - single line each
     if (cv.certifications && cv.certifications.length > 0) {
-        const certLines = cv.certifications.map(cert =>
-            `- ${cert.name} | ${cert.issuer} (${cert.year})`
-        ).join('\n')
-        sections.push(`## Certifications\n\n${certLines}`)
+        lines.push(`## Certifications`)
+        cv.certifications.forEach(cert => {
+            lines.push(`**${cert.name}** — ${cert.issuer} *(${cert.year})*`)
+        })
     }
 
-    // Languages
+    // Languages - inline if short
     if (cv.languages && cv.languages.length > 0) {
-        sections.push(`## Languages\n\n${cv.languages.join(', ')}`)
+        lines.push(`## Languages`)
+        lines.push(cv.languages.join(' • '))
     }
 
-    return sections.join('\n\n---\n\n')
+    // Join with single newlines - CSS handles spacing
+    return lines.join('\n')
 }
