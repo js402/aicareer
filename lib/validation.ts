@@ -101,13 +101,22 @@ export const createJobPositionSchema = z.object({
   experience_alignment: z.any().optional(),
   responsibility_alignment: z.any().optional(),
   employment_type: normalizeEmploymentType,
-  seniority_level: normalizeSeniorityLevel
+  seniority_level: normalizeSeniorityLevel,
+  cv_metadata_id: z.string().uuid('Valid CV metadata ID is required')
 })
 
 export const updateJobPositionSchema = z.object({
   status: z.enum(['saved', 'applied', 'interviewing', 'offered', 'rejected', 'withdrawn']).optional(),
   notes: z.string().max(1000, 'Notes are too long').optional(),
-  submitted_cv_id: z.string().uuid('Invalid CV ID').optional()
+  submitted_cv_id: z.string().uuid('Invalid CV ID').optional(),
+  // Fields for re-analyzing with a different CV
+  cv_metadata_id: z.string().uuid('Invalid CV metadata ID').optional(),
+  match_score: z.number().min(0).max(100).optional(),
+  matching_skills: z.array(z.string()).optional(),
+  missing_skills: z.array(z.string()).optional(),
+  recommendations: z.array(z.string()).optional(),
+  experience_alignment: z.any().optional(),
+  responsibility_alignment: z.any().optional()
 }).refine(
   (data) => Object.keys(data).length > 0,
   'At least one field must be provided for update'
@@ -123,7 +132,7 @@ export const tailorCVSchema = z.object({
   jobDescription: nonEmptyString.max(10000, 'Job description is too long'),
   matchAnalysis: z.any().optional(), // Analysis from job match evaluation
   additionalInstructions: z.string().max(1000, 'Instructions are too long').optional(),
-  cvMetadataId: z.string().uuid().optional() // Optional: specify which CV to tailor
+  cvMetadataId: z.string().uuid('Valid CV metadata ID is required') // Required: specify which CV to tailor
 })
 
 // Job match evaluation schemas

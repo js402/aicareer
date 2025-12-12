@@ -17,6 +17,7 @@ export interface ExtractMetadataResponse {
   status: 'valid' | 'invalid' | 'incomplete' | 'cached'
   message?: string
   extractedInfo?: ExtractedCVInfo
+  metadataId?: string
   questions?: string[]
 }
 
@@ -47,7 +48,7 @@ export function useCVOperations() {
           const result: ExtractMetadataResponse = await response.json()
 
           if (result.extractedInfo) {
-            setExtractedInfo(result.extractedInfo)
+            setExtractedInfo(result.extractedInfo, result.metadataId)
           }
 
           return result

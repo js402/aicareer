@@ -23,6 +23,7 @@ export const POST = withAuth(async (request, { supabase, user }) => {
         if (cachedMetadata) {
             return NextResponse.json({
                 extractedInfo: cachedMetadata.extracted_info,
+                metadataId: cachedMetadata.id,
                 status: 'cached',
                 cachedAt: cachedMetadata.created_at,
                 extractionStatus: cachedMetadata.extraction_status,
@@ -48,9 +49,10 @@ export const POST = withAuth(async (request, { supabase, user }) => {
         // For incomplete CVs, still return the extracted info if available
         if (validation?.status === 'incomplete') {
             // Store partial metadata in database if we have any extracted info
+            let storedMetadata = null
             if (validation.extractedInfo) {
                 try {
-                    await storeCVMetadata(
+                    storedMetadata = await storeCVMetadata(
                         supabase,
                         user.id,
                         cvHash,
@@ -67,6 +69,7 @@ export const POST = withAuth(async (request, { supabase, user }) => {
                 {
                     message: 'CV is incomplete',
                     extractedInfo: validation.extractedInfo,
+                    metadataId: storedMetadata?.id,
                     status: 'incomplete'
                 },
                 { status: 200 } // Return 200 so frontend can handle it gracefully
@@ -84,9 +87,10 @@ export const POST = withAuth(async (request, { supabase, user }) => {
         }
 
         // Store metadata in database
+        let storedMetadata = null
         try {
             const extractionStatus = validation.status === 'valid' ? 'completed' : 'partial'
-            await storeCVMetadata(
+            storedMetadata = await storeCVMetadata(
                 supabase,
                 user.id,
                 cvHash,
@@ -102,6 +106,7 @@ export const POST = withAuth(async (request, { supabase, user }) => {
         // Return successfully extracted metadata
         return NextResponse.json({
             extractedInfo: validation.extractedInfo,
+            metadataId: storedMetadata?.id,
             status: validation.status,
             extractionStatus: validation.status === 'valid' ? 'completed' : 'partial'
         })

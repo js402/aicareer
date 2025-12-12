@@ -31,7 +31,8 @@ export const POST = withAuth(async (request, { supabase, user }) => {
             experience_alignment,
             responsibility_alignment,
             employment_type,
-            seniority_level
+            seniority_level,
+            cv_metadata_id
         } = validation.data
 
         // Check for existing position
@@ -88,6 +89,7 @@ export const POST = withAuth(async (request, { supabase, user }) => {
                 responsibility_alignment,
                 employment_type,
                 seniority_level,
+                cv_metadata_id,
                 status: 'saved'
             })
             .select()

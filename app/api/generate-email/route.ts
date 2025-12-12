@@ -1,17 +1,35 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { openai, DEFAULT_MODEL } from '@/lib/openai'
 import { withAuth } from '@/lib/api-middleware'
+import type { ExtractedCVInfo } from '@/lib/api-client'
 
-export const POST = withAuth(async (request, { user }) => {
+export const POST = withAuth(async (request, { user, supabase }) => {
     try {
-        const { jobDescription, cvContent, mode, companyName, positionTitle, tone, length, focus } = await request.json()
+        const { jobDescription, cvMetadataId, mode, companyName, positionTitle, tone, length, focus } = await request.json()
 
-        if (!jobDescription || !mode) {
+        if (!jobDescription || !mode || !cvMetadataId) {
             return NextResponse.json(
-                { error: 'Missing required fields' },
+                { error: 'Missing required fields: jobDescription, mode, and cvMetadataId are required' },
                 { status: 400 }
             )
         }
+
+        // Fetch CV metadata from database
+        const { data: cvMetadata, error: cvError } = await supabase
+            .from('cv_metadata')
+            .select('extracted_info')
+            .eq('id', cvMetadataId)
+            .eq('user_id', user.id)
+            .single()
+
+        if (cvError || !cvMetadata) {
+            return NextResponse.json(
+                { error: 'CV not found. The specified CV does not exist or does not belong to you.' },
+                { status: 404 }
+            )
+        }
+
+        const extractedInfo: ExtractedCVInfo = cvMetadata.extracted_info
 
         const systemPrompt = `You are a professional career coach helper. 
         Your task is to write a highly tailored, direct, and professional application email body for a job.
@@ -53,11 +71,22 @@ export const POST = withAuth(async (request, { user }) => {
         Return ONLY the email body text.
         `
 
+        // Build a concise CV summary from extracted info
+        const cvSummary = [
+            extractedInfo.name ? `Name: ${extractedInfo.name}` : '',
+            extractedInfo.summary ? `Summary: ${extractedInfo.summary}` : '',
+            extractedInfo.skills?.length ? `Key Skills: ${extractedInfo.skills.slice(0, 10).join(', ')}` : '',
+            extractedInfo.experience?.length ? `Recent Experience: ${extractedInfo.experience.slice(0, 2).map(e => `${e.role} at ${e.company}`).join('; ')}` : '',
+            extractedInfo.yearsOfExperience ? `Years of Experience: ${extractedInfo.yearsOfExperience}` : '',
+            extractedInfo.seniorityLevel ? `Seniority Level: ${extractedInfo.seniorityLevel}` : '',
+        ].filter(Boolean).join('\n')
+
         const userPrompt = `
         Job Description:
-        ${jobDescription.slice(0, 1500)}... (truncated)
+        ${jobDescription.slice(0, 1500)}
 
-        ${cvContent ? `My CV Content Summary:\n${cvContent.slice(0, 1000)}...` : ''}
+        My CV Summary:
+        ${cvSummary}
         `
 
         const completion = await openai.chat.completions.create({

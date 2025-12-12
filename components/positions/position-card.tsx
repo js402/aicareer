@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, Building2, MapPin, ArrowRight } from "lucide-react"
+import { Calendar, Building2, MapPin, ArrowRight, Trash2 } from "lucide-react"
 import { StatusBadge } from "./status-badge"
 
 interface PositionCardProps {
@@ -14,9 +14,10 @@ interface PositionCardProps {
         status: string
         created_at: string
     }
+    onDelete?: (id: string) => void
 }
 
-export function PositionCard({ position }: PositionCardProps) {
+export function PositionCard({ position, onDelete }: PositionCardProps) {
     const getScoreColor = (score: number) => {
         if (score >= 80) return 'text-green-600 dark:text-green-400'
         if (score >= 50) return 'text-amber-600 dark:text-amber-400'
@@ -64,12 +65,27 @@ export function PositionCard({ position }: PositionCardProps) {
                             </div>
                         )}
 
-                        <Button size="sm" variant="outline" asChild>
-                            <Link href={`/positions/${position.id}`}>
-                                View Details
-                                <ArrowRight className="ml-2 h-3 w-3" />
-                            </Link>
-                        </Button>
+                        <div className="flex gap-2">
+                            {onDelete && (
+                                <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        onDelete(position.id)
+                                    }}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            )}
+                            <Button size="sm" variant="outline" asChild>
+                                <Link href={`/positions/${position.id}`}>
+                                    View Details
+                                    <ArrowRight className="ml-2 h-3 w-3" />
+                                </Link>
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </CardContent>

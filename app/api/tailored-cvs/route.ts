@@ -1,15 +1,14 @@
 import { NextResponse } from 'next/server'
 import { withProAccess } from '@/lib/api-middleware'
-import crypto from 'crypto'
 
 export const POST = withProAccess(async (request, { supabase, user }) => {
     try {
         const body = await request.json()
-        const { job_position_id, cv_content, tailored_content } = body
+        const { job_position_id, cv_metadata_id, tailored_content } = body
 
-        if (!job_position_id || !cv_content || !tailored_content) {
+        if (!job_position_id || !cv_metadata_id || !tailored_content) {
             return NextResponse.json(
-                { error: 'Missing required fields' },
+                { error: 'Missing required fields: job_position_id, cv_metadata_id, and tailored_content are required' },
                 { status: 400 }
             )
         }
@@ -21,11 +20,22 @@ export const POST = withProAccess(async (request, { supabase, user }) => {
             )
         }
 
-        // Calculate hash of original CV
-        const original_cv_hash = crypto
-            .createHash('sha256')
-            .update(cv_content)
-            .digest('hex')
+        // Get the cv_hash from cv_metadata to maintain traceability
+        const { data: cvMetadata, error: metadataError } = await supabase
+            .from('cv_metadata')
+            .select('cv_hash')
+            .eq('id', cv_metadata_id)
+            .eq('user_id', user.id)
+            .single()
+
+        if (metadataError || !cvMetadata) {
+            return NextResponse.json(
+                { error: 'CV metadata not found' },
+                { status: 404 }
+            )
+        }
+
+        const original_cv_hash = cvMetadata.cv_hash
 
         // Get latest version number
         const { data: latestVersion } = await supabase

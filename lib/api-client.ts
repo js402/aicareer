@@ -1,5 +1,3 @@
-// Removed conflicting import - ContactInfo is now defined locally with enhanced fields
-
 export interface ValidateCVResponse {
     status: 'valid' | 'suspicious' | 'invalid'
     message: string

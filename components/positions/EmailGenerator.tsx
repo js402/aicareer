@@ -5,17 +5,18 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Mail, Copy, Check, Loader2, Sparkles } from 'lucide-react'
+import { Mail, Copy, Check, Loader2, Sparkles, AlertCircle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 interface EmailGeneratorProps {
     jobDescription: string
-    cvContent: string | null
+    cvMetadataId: string | null
     companyName: string
     positionTitle: string
 }
 
-export function EmailGenerator({ jobDescription, cvContent, companyName, positionTitle }: EmailGeneratorProps) {
+export function EmailGenerator({ jobDescription, cvMetadataId, companyName, positionTitle }: EmailGeneratorProps) {
     const { toast } = useToast()
     const [mode, setMode] = useState<'employee' | 'freelancer'>('employee')
     const [tone, setTone] = useState<string>('Professional')
@@ -26,6 +27,15 @@ export function EmailGenerator({ jobDescription, cvContent, companyName, positio
     const [isCopied, setIsCopied] = useState(false)
 
     const handleGenerate = async () => {
+        if (!cvMetadataId) {
+            toast({
+                variant: "destructive",
+                title: "No CV Selected",
+                description: "Please upload a CV first to generate personalized emails.",
+            })
+            return
+        }
+
         setIsGenerating(true)
         try {
             const response = await fetch('/api/generate-email', {
@@ -33,7 +43,7 @@ export function EmailGenerator({ jobDescription, cvContent, companyName, positio
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     jobDescription,
-                    cvContent,
+                    cvMetadataId,
                     mode,
                     companyName,
                     positionTitle,
@@ -78,6 +88,15 @@ export function EmailGenerator({ jobDescription, cvContent, companyName, positio
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+                {!cvMetadataId && (
+                    <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                            No CV selected. Please upload a CV to generate personalized emails.
+                        </AlertDescription>
+                    </Alert>
+                )}
+
                 <div className="space-y-3">
                     <Label>Application Mode</Label>
                     <RadioGroup
@@ -140,7 +159,7 @@ export function EmailGenerator({ jobDescription, cvContent, companyName, positio
 
                 <Button
                     onClick={handleGenerate}
-                    disabled={isGenerating}
+                    disabled={isGenerating || !cvMetadataId}
                     className="w-full"
                 >
                     {isGenerating ? (

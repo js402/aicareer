@@ -116,7 +116,7 @@ export default function CVMetadataPage() {
                     // Use a placeholder for CV content - the extracted info is what matters
                     const cvName = item.extracted_info?.name || 'Unknown'
                     setCV(`[CV content for ${cvName}]`, `${cvName}_CV`)
-                    setExtractedInfo(item.extracted_info)
+                    setExtractedInfo(item.extracted_info, item.id)
                     // No analysis yet - user can generate it on the analysis page
                     router.push('/analysis')
                     return
@@ -131,7 +131,7 @@ export default function CVMetadataPage() {
             // Populate store and navigate
             clear()
             setCV(data.cvContent, data.filename || 'Stored CV')
-            setExtractedInfo(item.extracted_info)
+            setExtractedInfo(item.extracted_info, item.id)
             
             // If analysis exists, go directly to report page
             if (data.analysis) {

@@ -13,6 +13,16 @@ import { useDebounce } from "@/hooks/useDebounce"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { EmptyState } from "@/components/ui/empty-state"
 import { useState, useMemo } from "react"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Position {
     id: string
@@ -33,13 +43,43 @@ export default function PositionsPage() {
 
     const [filterStatus, setFilterStatus] = useState('all')
     const [searchQuery, setSearchQuery] = useState('')
+    const [deleteId, setDeleteId] = useState<string | null>(null)
+    const [isDeleting, setIsDeleting] = useState(false)
     const debouncedSearch = useDebounce(searchQuery, 300)
     
-    const { data: response, isLoading } = useFetch<PositionsResponse>(
+    const { data: response, isLoading, refetch } = useFetch<PositionsResponse>(
         '/api/job-positions'
     )
 
     const positions = response?.positions || []
+    
+    const positionToDelete = positions.find(p => p.id === deleteId)
+
+    const handleDeleteClick = (id: string) => {
+        setDeleteId(id)
+    }
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteId) return
+        
+        setIsDeleting(true)
+        try {
+            const response = await fetch(`/api/job-positions/${deleteId}`, {
+                method: 'DELETE'
+            })
+            
+            if (response.ok) {
+                await refetch()
+            } else {
+                console.error('Failed to delete position')
+            }
+        } catch (error) {
+            console.error('Error deleting position:', error)
+        } finally {
+            setIsDeleting(false)
+            setDeleteId(null)
+        }
+    }
 
     const filteredPositions = useMemo(() => {
         return positions.filter(position => {
@@ -106,7 +146,11 @@ export default function PositionsPage() {
                 ) : filteredPositions.length > 0 ? (
                     <div className="grid md:grid-cols-2 gap-6">
                         {filteredPositions.map(position => (
-                            <PositionCard key={position.id} position={position} />
+                            <PositionCard 
+                                key={position.id} 
+                                position={position} 
+                                onDelete={handleDeleteClick}
+                            />
                         ))}
                     </div>
                 ) : searchQuery || filterStatus !== 'all' ? (
@@ -129,6 +173,28 @@ export default function PositionsPage() {
                         actionLabel="Add Your First Position"
                     />
                 )}
+
+                <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Job Position</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Are you sure you want to delete the position &quot;{positionToDelete?.position_title}&quot; at {positionToDelete?.company_name}? 
+                                This will permanently delete the job position and all associated tailored CVs. This action cannot be undone.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={handleDeleteConfirm}
+                                disabled={isDeleting}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                {isDeleting ? 'Deleting...' : 'Delete'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </main>
         </div>
     )

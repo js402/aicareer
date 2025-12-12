@@ -118,7 +118,7 @@ export default function JobMatchPage() {
         fetchCvInfo()
     }, [selectedCvId])
 
-    useAuthGuard({ redirectTo: 'analysis/job-match', requireCV: true, cvContent })
+    useAuthGuard({ redirectTo: 'analysis/job-match' })
 
     const handleSaveCVEdits = async (updatedInfo: ExtractedCVInfo) => {
         if (!selectedCvId) return
@@ -172,6 +172,13 @@ export default function JobMatchPage() {
 
     const handleTrackApplication = async () => {
         if (!matchResult) return
+        
+        const cvMetadataId = selectedCvId || suggestedCvId
+        if (!cvMetadataId) {
+            setTrackError('No CV selected. Please select a CV to track this application.')
+            return
+        }
+        
         setIsSaving(true)
         setTrackError('')
 
@@ -192,7 +199,8 @@ export default function JobMatchPage() {
                     experience_alignment: matchResult.experienceAlignment,
                     responsibility_alignment: matchResult.responsibilityAlignment,
                     employment_type: editedMetadata.employment_type || null,
-                    seniority_level: editedMetadata.seniority_level || null
+                    seniority_level: editedMetadata.seniority_level || null,
+                    cv_metadata_id: cvMetadataId
                 })
             })
 
@@ -211,7 +219,40 @@ export default function JobMatchPage() {
         }
     }
 
-    if (!cvContent) return null
+    // Show empty state if user has no CVs uploaded
+    if (cvList.length === 0) {
+        return (
+            <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
+                <Navbar />
+                <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
+                    <Button
+                        variant="ghost"
+                        onClick={() => router.back()}
+                        className="mb-6 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back
+                    </Button>
+                    <Card className="border-none shadow-lg bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
+                        <CardHeader className="text-center">
+                            <CardTitle className="text-2xl">No CV Found</CardTitle>
+                            <p className="text-muted-foreground mt-2">
+                                You need to upload a CV before you can analyze job matches.
+                            </p>
+                        </CardHeader>
+                        <CardContent className="flex justify-center pb-8">
+                            <Button 
+                                onClick={() => router.push('/')}
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                                Upload CV
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </main>
+            </div>
+        )
+    }
 
     return (
         <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
