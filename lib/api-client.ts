@@ -1,4 +1,4 @@
-import { ContactInfo } from "@/lib/utils"
+// Removed conflicting import - ContactInfo is now defined locally with enhanced fields
 
 export interface ValidateCVResponse {
     status: 'valid' | 'suspicious' | 'invalid'
@@ -24,16 +24,75 @@ export interface ProcessCVResponse {
 }
 
 // Added types
+export interface ContactInfo {
+    email?: string
+    phone?: string
+    location?: string
+    linkedin?: string
+    github?: string
+    website?: string
+    raw?: string
+}
+
+export interface ExperienceEntry {
+    role: string
+    company: string
+    location?: string
+    duration: string
+    description?: string
+    highlights?: string[]
+}
+
+export interface EducationEntry {
+    degree: string
+    institution: string
+    location?: string
+    year: string
+    gpa?: string
+    coursework?: string[]
+    activities?: string[]
+}
+
+export interface ProjectEntry {
+    name: string
+    description: string
+    technologies: string[]
+    link?: string
+    duration?: string
+}
+
+export interface CertificationEntry {
+    name: string
+    issuer: string
+    year: string
+}
+
+export interface LeadershipEntry {
+    role: string
+    organization: string
+    duration: string
+    description?: string
+    highlights?: string[]
+}
+
+export type SeniorityLevel = 'entry' | 'junior' | 'mid' | 'senior' | 'lead' | 'principal' | 'director' | 'executive'
+
 export interface ExtractedCVInfo {
     name?: string
     contactInfo: string | ContactInfo
-    experience: Array<{ role: string; company: string; duration: string }>
-    education: Array<{ degree: string; institution: string; year: string }>
+    experience: ExperienceEntry[]
+    education: EducationEntry[]
     skills: string[]
-    projects: Array<{ name: string; description: string; technologies: string[]; link?: string }>
-    certifications: Array<{ name: string; issuer: string; year: string }>
+    inferredSkills?: string[]  // Skills inferred from context
+    projects: ProjectEntry[]
+    certifications: CertificationEntry[]
     languages: string[]
     summary: string
+    leadership?: LeadershipEntry[]
+    seniorityLevel?: SeniorityLevel
+    yearsOfExperience?: number
+    industries?: string[]
+    primaryFunctions?: string[]
 }
 
 export interface CVMetadataResponse {
@@ -190,15 +249,29 @@ export async function getUserCVMetadata(): Promise<{ metadata: CVMetadataRespons
     return response.json()
 }
 
-export async function updateCVMetadata(metadataId: string, updatedInfo: ExtractedCVInfo): Promise<CVMetadataResponse> {
+export async function updateCVMetadata(metadataId: string, updatedInfo: ExtractedCVInfo): Promise<{ metadata: CVMetadataResponse }> {
     const response = await fetch(`/api/cv-metadata/${metadataId}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ extracted_info: updatedInfo }),
+        body: JSON.stringify({ extractedInfo: updatedInfo }),
     })
 
     if (!response.ok) {
         throw new Error('Failed to update CV metadata')
+    }
+
+    return response.json()
+}
+
+export async function renameCVMetadata(metadataId: string, displayName: string): Promise<{ metadata: CVMetadataResponse }> {
+    const response = await fetch(`/api/cv-metadata/${metadataId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName }),
+    })
+
+    if (!response.ok) {
+        throw new Error('Failed to rename CV')
     }
 
     return response.json()

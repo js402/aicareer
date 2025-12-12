@@ -1,5 +1,6 @@
 import { openai, DEFAULT_MODEL } from '@/lib/openai'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import { getExtractionPromptFragment } from '@/lib/resume-guidelines'
 
 export interface ValidationResult {
     status: 'valid' | 'incomplete' | 'invalid'
@@ -7,47 +8,151 @@ export interface ValidationResult {
     rejectionReason?: string
     extractedInfo?: {
         name: string
-        contactInfo: string
+        contactInfo: {
+            email?: string
+            phone?: string
+            location?: string
+            linkedin?: string
+            github?: string
+            website?: string
+            raw?: string
+        }
         summary: string
-        experience: Array<{ role: string, company: string, duration: string }>
+        experience: Array<{
+            role: string
+            company: string
+            location?: string
+            duration: string
+            description?: string
+            highlights?: string[]
+        }>
         skills: string[]
-        education: Array<{ degree: string, institution: string, year: string }>
-        projects: Array<{ name: string, description: string, technologies: string[], link?: string }>
+        inferredSkills: string[]  // Skills inferred from context, not explicitly listed
+        education: Array<{
+            degree: string
+            institution: string
+            location?: string
+            year: string
+            gpa?: string
+            coursework?: string[]
+            activities?: string[]
+        }>
+        projects: Array<{ name: string, description: string, technologies: string[], link?: string, duration?: string }>
         certifications: Array<{ name: string, issuer: string, year: string }>
         languages: string[]
+        leadership: Array<{
+            role: string
+            organization: string
+            duration: string
+            description?: string
+            highlights?: string[]
+        }>
+        seniorityLevel: 'entry' | 'junior' | 'mid' | 'senior' | 'lead' | 'principal' | 'director' | 'executive'
+        yearsOfExperience: number
+        industries: string[]
+        primaryFunctions: string[]
     }
     issues?: string[]
+    formatType?: 'bullet' | 'paragraph' | 'mixed'
 }
 
-const INPUT_VALIDATION_PROMPT = `You are a CV structure validator. Your job is to:
+const INPUT_VALIDATION_PROMPT = `You are an expert CV/Resume parser and validator. Your job is to:
 1. Determine if the input is a valid CV/Resume or professional profile.
 2. If it is NOT a CV (e.g., random text, code, a poem, a recipe), mark it as INVALID.
-3. If it IS a CV but has significant gaps (missing name, missing contact info, very sparse experience, missing dates), mark it as INCOMPLETE and generate specific questions to ask the user.
-4. If it is a complete and valid CV, mark it as VALID and extract the information.
+3. If it IS a CV but has significant gaps, mark it as INCOMPLETE and generate specific questions.
+4. If it is a complete and valid CV, mark it as VALID and extract ALL information comprehensively.
+
+IMPORTANT - FORMAT FLEXIBILITY:
+- Accept BOTH bullet-point style AND paragraph-style resumes as valid
+- Accept section headings like "Education", "Experience", "Relevant Experience", "Technical Skills & Projects", "Leadership", etc.
+- Parse contact info from header lines like "City, ST ZIP • email • phone • url"
+- Handle varied date formats: "Jan 2024 - May 2025", "June - August 2025", "2020-2022", "May 2026 (expected)"
+
+${getExtractionPromptFragment()}
 
 Return a JSON object with:
 {
   "status": "valid" | "incomplete" | "invalid",
-  "missingInfoQuestions": string[], // If incomplete, list 3-5 specific questions to gather missing info
-  "rejectionReason": string, // If invalid, explain why (e.g., "This appears to be a python script, not a CV")
+  "formatType": "bullet" | "paragraph" | "mixed",
+  "missingInfoQuestions": string[], // If incomplete, list 3-5 specific questions
+  "rejectionReason": string, // If invalid, explain why
   "extractedInfo": {
     "name": string,
-    "contactInfo": string,
-    "summary": string, // Professional summary or objective
-    "experience": Array<{role: string, company: string, duration: string}>,
-    "skills": string[],
-    "education": Array<{degree: string, institution: string, year: string}>,
-    "projects": Array<{name: string, description: string, technologies: string[], link?: string}>,
-    "certifications": Array<{name: string, issuer: string, year: string}>,
-    "languages": string[]
-  }
+    "contactInfo": {
+      "email": string | null,
+      "phone": string | null,
+      "location": string | null,
+      "linkedin": string | null,
+      "github": string | null,
+      "website": string | null,
+      "raw": string // Original contact line for reference
+    },
+    "summary": string, // Professional summary/objective, or synthesize from overall profile
+    "experience": [
+      {
+        "role": string,
+        "company": string,
+        "location": string | null,
+        "duration": string,
+        "description": string | null,
+        "highlights": string[] // Key achievements/bullets
+      }
+    ],
+    "skills": string[], // Explicitly listed skills
+    "inferredSkills": string[], // Skills inferred from experience, projects, education (e.g., "Taught C, PHP" → C, PHP, Teaching)
+    "education": [
+      {
+        "degree": string,
+        "institution": string,
+        "location": string | null,
+        "year": string,
+        "gpa": string | null,
+        "coursework": string[], // Relevant coursework if listed
+        "activities": string[] // Extracurriculars tied to education
+      }
+    ],
+    "projects": [
+      {
+        "name": string,
+        "description": string,
+        "technologies": string[],
+        "link": string | null,
+        "duration": string | null
+      }
+    ],
+    "certifications": [{"name": string, "issuer": string, "year": string}],
+    "languages": string[], // Spoken languages
+    "leadership": [
+      {
+        "role": string,
+        "organization": string,
+        "duration": string,
+        "description": string | null,
+        "highlights": string[]
+      }
+    ],
+    "seniorityLevel": "entry" | "junior" | "mid" | "senior" | "lead" | "principal" | "director" | "executive",
+    "yearsOfExperience": number, // Estimated total professional experience
+    "industries": string[], // Inferred industries (tech, finance, healthcare, etc.)
+    "primaryFunctions": string[] // Primary job functions (Software Engineering, Product, Data, etc.)
+  },
+  "issues": string[] // Any issues found (missing dates, vague descriptions, etc.)
 }
 
+SKILL EXTRACTION IS CRITICAL:
+1. Extract ALL explicitly listed skills (from Skills sections, Programming: lines, etc.)
+2. INFER skills from:
+   - Technologies mentioned in experience/projects ("using React and Node.js" → React, Node.js)
+   - Responsibilities ("managed AWS" → AWS, Cloud)
+   - Teaching/mentoring activities ("Taught C, PHP" → C, PHP, Teaching, Mentoring)
+   - Education coursework ("Data Structures" → Algorithms, Data Structures)
+3. Normalize skill names (React.js → React, K8s → Kubernetes)
+4. Don't duplicate between skills and inferredSkills
+
 Rules:
-- Status "invalid": Use this for completely irrelevant content.
-- Status "incomplete": Use this if it looks like a CV but is missing core fields like Name, Contact Info, or has no Experience/Education listed.
-- Status "valid": Use this if it has at least Name, Contact Info, and some Experience or Education.
-`
+- Status "invalid": Use for completely irrelevant content (not a CV at all)
+- Status "incomplete": Use if missing Name, all Contact Info, OR has no Experience AND no Education
+- Status "valid": Has Name, some Contact Info, AND (Experience OR Education)`
 
 /**
  * Validates and extracts metadata from CV content using AI.

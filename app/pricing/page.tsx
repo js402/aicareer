@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from 'react'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,28 +7,19 @@ import { Navbar } from "@/components/navbar"
 import { Check } from "lucide-react"
 import { Footer } from "@/components/footer"
 import { PageHeader } from "@/components/page-header"
+import { useFetch } from "@/hooks/useFetch"
+
+interface SubscriptionStatus {
+    isPro: boolean
+}
 
 export default function PricingPage() {
-    const [isPro, setIsPro] = useState<boolean | null>(null)
-
-    useEffect(() => {
-        const checkProStatus = async () => {
-            try {
-                const response = await fetch('/api/subscription/status')
-                if (response.ok) {
-                    const { isPro } = await response.json()
-                    setIsPro(isPro)
-                } else {
-                    // Not authenticated or error
-                    setIsPro(false)
-                }
-            } catch (error) {
-                console.error('Error checking subscription status:', error)
-                setIsPro(false)
-            }
-        }
-        checkProStatus()
-    }, [])
+    const { data: subscription } = useFetch<SubscriptionStatus>(
+        '/api/subscription/status',
+        { skip: false }
+    )
+    
+    const isPro = subscription?.isPro ?? false
 
     const plans = [
         {

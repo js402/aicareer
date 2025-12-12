@@ -38,19 +38,6 @@ const mockSupabase = {
         getSession: vi.fn().mockResolvedValue({ data: { session: mockSession }, error: null })
     },
     from: vi.fn().mockImplementation((table) => {
-        if (table === 'cv_blueprints') {
-            return {
-                select: vi.fn().mockReturnThis(),
-                eq: vi.fn().mockReturnThis(),
-                single: vi.fn().mockResolvedValue({
-                    data: {
-                        id: 'blueprint_123',
-                        profile_data: { name: 'Test User' }
-                    },
-                    error: null
-                })
-            }
-        }
         if (table === 'tailored_cvs') {
             return {
                 insert: vi.fn().mockReturnThis(),

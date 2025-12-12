@@ -47,24 +47,25 @@ describe('evaluate-job-match API', () => {
             rpc: vi.fn()
         };
 
-        // Mock the blueprint fetching and job match caching
+        // Mock the CV metadata fetching and job match caching
         supabaseMock.from.mockImplementation((table: string) => {
-            if (table === 'cv_blueprints') {
+            if (table === 'cv_metadata') {
                 return {
                     select: vi.fn().mockReturnThis(),
                     eq: vi.fn().mockReturnThis(),
-                    single: vi.fn().mockResolvedValue({
-                        data: {
-                            id: 'blueprint-123',
-                            profile_data: {
-                                personal: { name: 'John Doe' },
-                                contact: { email: 'john@example.com' },
-                                experience: [{ role: 'Developer', company: 'Tech Corp', duration: '2020-2024' }],
+                    order: vi.fn().mockReturnThis(),
+                    limit: vi.fn().mockResolvedValue({
+                        data: [{
+                            id: 'cv-metadata-123',
+                            cv_hash: 'cv-hash-123',
+                            extracted_info: {
+                                name: 'John Doe',
+                                contactInfo: { email: 'john@example.com' },
+                                experience: [{ title: 'Developer', company: 'Tech Corp', duration: '2020-2024' }],
                                 education: [{ degree: 'BS', institution: 'University', year: '2020' }],
                                 skills: ['JavaScript', 'React']
-                            },
-                            confidence_score: 0.8
-                        },
+                            }
+                        }],
                         error: null
                     })
                 }

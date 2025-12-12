@@ -4,64 +4,107 @@ import { hashCV, getCachedAnalysis, storeAnalysis } from '@/lib/cv-cache'
 import { withAuth } from '@/lib/api-middleware'
 import { validateInput, analyzeCVSchema } from '@/lib/validation'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
+import { getAnalysisPromptFragment, getExtractionPromptFragment } from '@/lib/resume-guidelines'
 
 
 
-// Step 1: Input Validation Prompt
-const INPUT_VALIDATION_PROMPT = `You are a CV structure validator. Your job is to:
+// Step 1: Input Validation Prompt (simplified for analysis - full extraction in cv-service.ts)
+const INPUT_VALIDATION_PROMPT = `You are an expert CV/Resume parser. Your job is to:
 1. Determine if the input is a valid CV/Resume or professional profile.
-2. If it is NOT a CV (e.g., random text, code, a poem, a recipe), mark it as INVALID.
-3. If it IS a CV but has significant gaps (missing name, missing contact info, very sparse experience, missing dates), mark it as INCOMPLETE and generate specific questions to ask the user.
-4. If it is a complete and valid CV, mark it as VALID and extract the information.
+2. If it is NOT a CV (e.g., random text, code, a poem), mark it as INVALID.
+3. If it IS a CV but has significant gaps, mark it as INCOMPLETE.
+4. If it is a valid CV, mark it as VALID and extract key information.
+
+${getExtractionPromptFragment()}
+
+IMPORTANT: Accept both bullet-point AND paragraph-style resumes as valid.
 
 Return a JSON object with:
 {
   "status": "valid" | "incomplete" | "invalid",
-  "missingInfoQuestions": string[], // If incomplete, list 3-5 specific questions to gather missing info
-  "rejectionReason": string, // If invalid, explain why (e.g., "This appears to be a python script, not a CV")
+  "missingInfoQuestions": string[],
+  "rejectionReason": string,
   "extractedInfo": {
     "name": string,
     "contactInfo": string,
-    "experience": Array<{role: string, company: string, duration: string}>,
+    "summary": string,
+    "experience": Array<{role: string, company: string, duration: string, description?: string}>,
     "skills": string[],
-    "education": Array<{degree: string, institution: string, year: string}>
+    "inferredSkills": string[],
+    "education": Array<{degree: string, institution: string, year: string}>,
+    "seniorityLevel": "entry" | "junior" | "mid" | "senior" | "lead" | "principal" | "director" | "executive",
+    "yearsOfExperience": number
   }
 }
 
 Rules:
-- Status "invalid": Use this for completely irrelevant content.
-- Status "incomplete": Use this if it looks like a CV but is missing core fields like Name, Contact Info, or has no Experience/Education listed.
-- Status "valid": Use this if it has at least Name, Contact Info, and some Experience or Education.
+- Status "invalid": Completely irrelevant content.
+- Status "incomplete": Missing Name, Contact Info, or has no Experience AND no Education.
+- Status "valid": Has Name, some Contact Info, and (Experience OR Education).
 `
 
 // Step 2: Analysis Generation Prompt
-const ANALYSIS_GENERATION_PROMPT = `You are an expert career advisor and CV analyst. Based on the validated CV structure, provide a comprehensive analysis in markdown format.
+const ANALYSIS_GENERATION_PROMPT = `You are an expert career advisor, technical recruiter, and CV analyst with deep knowledge of what makes resumes effective.
+
+Based on the validated CV structure, provide a comprehensive analysis in markdown format.
+
+${getAnalysisPromptFragment()}
 
 Your analysis MUST include these sections:
 
 # Executive Summary
-A brief 2-3 sentence overview of the candidate's profile and key strengths.
+A brief 2-3 sentence overview of the candidate's profile, seniority level, and key strengths.
+Mention their apparent career stage (entry/junior/mid/senior/lead/director/executive).
 
 # Strengths
 - List 4-6 key strengths with specific examples from their experience
 - Focus on both technical and soft skills
+- Highlight any impressive achievements with metrics
+
+# Format & Structure Assessment
+- Is the resume well-organized and easy to scan?
+- Are sections in logical order for their target roles?
+- Is formatting consistent (dates, bullets, spacing)?
+- Would this format work well for ATS systems?
+
+# Language & Impact Analysis
+- Does the resume use strong action verbs?
+- Are achievements quantified with specific metrics?
+- Is there passive language or use of pronouns that should be fixed?
+- Are bullet points specific (Skill + Tool + Result) or generic?
+
+Provide 3-5 specific bullet rewrite examples:
+- BEFORE: [quote weak bullet from CV]
+- AFTER: [improved version with action verb + context + metric]
 
 # Areas for Improvement
 - List 3-5 areas where the CV could be enhanced
 - Provide actionable suggestions for each
+- Note any of the top resume mistakes present:
+  * Missing contact info, passive language, no results/metrics, poor organization, spelling/grammar
 
 # Career Trajectory Analysis
 - Analyze the progression and coherence of their career path
 - Identify patterns and strategic moves
+- Note any gaps or transitions that could be better explained
 
 # Market Positioning
 - How competitive is this profile in the current market?
 - What roles/industries are they best suited for?
+- What salary range might they command?
 
 # Recommendations
 - 3-5 specific, actionable recommendations to strengthen their profile
+- Prioritize based on impact (high/medium/low)
+- Include timeline suggestions where relevant
 
-Use proper markdown formatting with headers (##), bullet points (-), and **bold** for emphasis.`
+For SENIOR/DIRECTOR level candidates, also assess:
+- Evidence of strategic impact and business outcomes
+- Leadership scope (team sizes, budgets, geographic reach)
+- Cross-functional influence and executive presence
+- Industry recognition or thought leadership
+
+Use proper markdown formatting with headers (##), bullet points (-), **bold** for emphasis, and > blockquotes for examples.`
 
 // Step 3: Output Validation Prompt
 const OUTPUT_VALIDATION_PROMPT = `You are a quality assurance validator. Check if the analysis meets these requirements:

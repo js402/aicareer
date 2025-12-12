@@ -3,61 +3,93 @@ import { openai } from '@/lib/openai'
 import { withProAccess } from '@/lib/api-middleware'
 import { validateInput, tailorCVSchema } from '@/lib/validation'
 import { cleanMarkdown } from '@/lib/markdown'
+import { getTailoringPromptFragment, SENIORITY_LEVELS } from '@/lib/resume-guidelines'
 
 /**
- * Format blueprint data into readable CV format for tailoring
- * (Same as evaluate-job-match to ensure consistency)
+ * Format CV metadata into readable CV format for tailoring
  */
-function formatBlueprintForAnalysis(blueprintData: any): string {
+function formatCVMetadataForTailoring(extractedInfo: any): string {
     const sections: string[] = []
 
-    // Personal Info
-    if (blueprintData.personal?.name) {
-        sections.push(`Name: ${blueprintData.personal.name}`)
+    // Name
+    if (extractedInfo.name) {
+        sections.push(`Name: ${extractedInfo.name}`)
     }
 
-    if (blueprintData.personal?.summary) {
-        sections.push(`Professional Summary: ${blueprintData.personal.summary}`)
+    // Summary
+    if (extractedInfo.summary) {
+        sections.push(`Professional Summary: ${extractedInfo.summary}`)
     }
 
     // Contact Info
+    const contact = extractedInfo.contactInfo || {}
     const contactParts: string[] = []
-    if (blueprintData.contact?.email) contactParts.push(`Email: ${blueprintData.contact.email}`)
-    if (blueprintData.contact?.phone) contactParts.push(`Phone: ${blueprintData.contact.phone}`)
-    if (blueprintData.contact?.location) contactParts.push(`Location: ${blueprintData.contact.location}`)
-    if (blueprintData.contact?.linkedin) contactParts.push(`LinkedIn: ${blueprintData.contact.linkedin}`)
-    if (blueprintData.contact?.website) contactParts.push(`Website: ${blueprintData.contact.website}`)
+    if (contact.email) contactParts.push(`Email: ${contact.email}`)
+    if (contact.phone) contactParts.push(`Phone: ${contact.phone}`)
+    if (contact.location) contactParts.push(`Location: ${contact.location}`)
+    if (contact.linkedin) contactParts.push(`LinkedIn: ${contact.linkedin}`)
+    if (contact.website || contact.portfolio) contactParts.push(`Website: ${contact.website || contact.portfolio}`)
 
     if (contactParts.length > 0) {
         sections.push(`Contact Information:\n${contactParts.join('\n')}`)
     }
 
     // Skills
-    if (blueprintData.skills && blueprintData.skills.length > 0) {
-        const skillsText = blueprintData.skills
-            .sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))
-            .map((skill: any) => skill.name)
-            .join(', ')
-        sections.push(`Skills: ${skillsText}`)
+    const allSkills = [
+        ...(extractedInfo.skills || []),
+        ...(extractedInfo.inferredSkills || [])
+    ]
+    if (allSkills.length > 0) {
+        sections.push(`Skills: ${allSkills.join(', ')}`)
     }
 
     // Experience
-    if (blueprintData.experience && blueprintData.experience.length > 0) {
-        const experienceText = blueprintData.experience
-            .map((exp: any) =>
-                `${exp.role} at ${exp.company} (${exp.duration})` +
-                (exp.description ? `\n  ${exp.description}` : '')
-            )
+    if (extractedInfo.experience && extractedInfo.experience.length > 0) {
+        const experienceText = extractedInfo.experience
+            .map((exp: any) => {
+                const title = exp.title || exp.role || 'Position'
+                const company = exp.company || 'Company'
+                const duration = exp.duration || exp.dates || ''
+                const bullets = exp.bullets || exp.responsibilities || []
+                return `${title} at ${company} (${duration})` +
+                    (bullets.length > 0 ? `\n  • ${bullets.join('\n  • ')}` : '')
+            })
             .join('\n\n')
         sections.push(`Professional Experience:\n${experienceText}`)
     }
 
     // Education
-    if (blueprintData.education && blueprintData.education.length > 0) {
-        const educationText = blueprintData.education
-            .map((edu: any) => `${edu.degree} from ${edu.institution} (${edu.year})`)
+    if (extractedInfo.education && extractedInfo.education.length > 0) {
+        const educationText = extractedInfo.education
+            .map((edu: any) => {
+                const degree = edu.degree || edu.qualification || 'Degree'
+                const institution = edu.institution || edu.school || 'Institution'
+                const year = edu.year || edu.graduationYear || ''
+                return `${degree} from ${institution}${year ? ` (${year})` : ''}`
+            })
             .join('\n')
         sections.push(`Education:\n${educationText}`)
+    }
+
+    // Leadership (if present)
+    if (extractedInfo.leadership && extractedInfo.leadership.length > 0) {
+        const leadershipText = extractedInfo.leadership
+            .map((item: any) => `${item.role}: ${item.description}`)
+            .join('\n')
+        sections.push(`Leadership & Impact:\n${leadershipText}`)
+    }
+
+    // Projects (if present)
+    if (extractedInfo.projects && extractedInfo.projects.length > 0) {
+        const projectsText = extractedInfo.projects
+            .map((proj: any) => `${proj.name || proj.title}: ${proj.description || ''}`)
+            .join('\n')
+        sections.push(`Projects:\n${projectsText}`)
+    }
+
+    // Certifications (if present)
+    if (extractedInfo.certifications && extractedInfo.certifications.length > 0) {
+        sections.push(`Certifications: ${extractedInfo.certifications.join(', ')}`)
     }
 
     return sections.join('\n\n')
@@ -76,25 +108,34 @@ export const POST = withProAccess(async (request: NextRequest, { supabase, user 
             )
         }
 
-        const { jobDescription, matchAnalysis } = validation.data
+        const { jobDescription, matchAnalysis, cvMetadataId } = validation.data
 
-        // Get user's blueprint (same as job match analysis)
-        const { data: blueprint } = await supabase
-            .from('cv_blueprints')
+        // Get user's CV metadata - either specific one or most recent
+        let cvMetadataQuery = supabase
+            .from('cv_metadata')
             .select('*')
             .eq('user_id', user.id)
-            .single()
 
-        if (!blueprint) {
+        if (cvMetadataId) {
+            cvMetadataQuery = cvMetadataQuery.eq('id', cvMetadataId)
+        } else {
+            cvMetadataQuery = cvMetadataQuery.order('created_at', { ascending: false }).limit(1)
+        }
+
+        const { data: cvMetadataList } = await cvMetadataQuery
+
+        const cvMetadata = cvMetadataList?.[0]
+
+        if (!cvMetadata) {
             return NextResponse.json(
-                { error: 'No CV blueprint found. Please upload a CV first.' },
+                { error: 'No CV found. Please upload a CV first.' },
                 { status: 400 }
             )
         }
 
-        // Format blueprint data for tailoring
-        const blueprintData = blueprint.profile_data
-        const cvContent = formatBlueprintForAnalysis(blueprintData)
+        // Format CV metadata for tailoring
+        const extractedInfo = cvMetadata.extracted_info
+        const cvContent = formatCVMetadataForTailoring(extractedInfo)
 
         // --------------------------------------------------------
         // STEP 1 — Tailored CV Generation
@@ -105,7 +146,7 @@ export const POST = withProAccess(async (request: NextRequest, { supabase, user 
                 {
                     role: "system",
                     content: `
-You are an elite CV writer who tailors CVs to match ANY job description provided in the input.
+You are an elite CV writer who creates professional, ATS-optimized resumes that follow best practices from top career centers.
 
 Your job is to:
 1. Identify the target role, required skills, seniority level, and key themes FROM the provided jobDescription.
@@ -114,6 +155,8 @@ Your job is to:
    - Matching skills to highlight
    - Missing skills to address through truthful adjacent experience
    - Recommendations to incorporate if factually allowed
+
+${getTailoringPromptFragment()}
 
 =========================
 STRICT FACTUAL RULES
@@ -125,20 +168,39 @@ STRICT FACTUAL RULES
 5. You MUST ground everything in the cvContent.
 
 =========================
+FORMAT REQUIREMENTS
+=========================
+1. Use BULLET POINTS for experience and achievements (not paragraphs)
+2. Each bullet MUST start with a strong ACTION VERB (Led, Developed, Implemented, etc.)
+3. NEVER use personal pronouns (I, We, My, Our)
+4. Follow the formula: [Action Verb] + [What] + [How/With What] + [Quantified Result]
+5. Keep bullets concise: 1-2 lines maximum
+6. Order sections by relevance to the target role
+
+=========================
 WHAT YOU MUST PRODUCE
 =========================
-1. A tailored **Professional Summary** that directly positions the candidate as relevant to the target role — using ONLY what is real.
-2. Rewritten Experience, Skills, and Education sections.
-3. Emphasis on transferable technical skills that relate to the target role.
-4. Clean Markdown output ONLY — no commentary, no explanations.
+1. A tailored **Professional Summary** (2-3 sentences) that directly positions the candidate for the target role
+2. **Skills** section with skills grouped logically (Technical, Tools, Languages, etc.)
+3. **Experience** section with:
+   - Company, Title, Location, Dates
+   - 3-5 bullet points per role, each with action verb + context + metric where possible
+4. **Education** section
+5. **Projects** or **Leadership** sections if relevant to the role
 
-Your output is ONLY the rewritten CV in Markdown.
+For DIRECTOR/EXECUTIVE level roles, emphasize:
+- Scope (team sizes, budgets, geographic reach)
+- Strategic impact and business outcomes
+- Cross-functional leadership
+- Executive stakeholder management
+
+Your output is ONLY the rewritten CV in Markdown — no commentary, no explanations.
 `
                 },
                 {
                     role: "user",
                     content: `
-CV Content (from accumulated blueprint data):
+CV Content:
 ${cvContent}
 
 Job Description:
@@ -167,7 +229,7 @@ ${JSON.stringify(matchAnalysis, null, 2)}
                 {
                     role: "system",
                     content: `
-You are a strict CV Quality Assurance Editor.
+You are a strict CV Quality Assurance Editor following Harvard MCS resume guidelines.
 
 Your job:
 1. Ensure the rewritten CV is 100% factual according to cvContent.
@@ -175,6 +237,15 @@ Your job:
 3. Ensure no invented languages, frameworks, or tech appear.
 4. Ensure the Professional Summary exists and aligns with the target role.
 5. Ensure the tone is concise, professional, and targeted.
+
+QUALITY CHECKS:
+- Every bullet point MUST start with a strong action verb (Led, Developed, Built, etc.)
+- NO personal pronouns (I, We, My, Our) anywhere
+- Bullets follow: Action + Context + Result/Metric pattern
+- No passive voice ("was responsible for" → "Managed")
+- Consistent formatting (dates, capitalization, punctuation)
+- Skills are properly grouped and relevant to target role
+
 6. Output **only** the final clean Markdown CV — no explanation.
 
 You must use:
@@ -186,7 +257,7 @@ You must use:
                 {
                     role: "user",
                     content: `
-Original CV (from blueprint):
+Original CV:
 ${cvContent}
 
 Job Description:

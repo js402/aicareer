@@ -9,7 +9,6 @@ import { User } from "@supabase/supabase-js"
 import { LogOut, User as UserIcon, Crown, Clock, Sparkles, Briefcase, Database, Sun, Moon, Monitor } from "lucide-react"
 import { useSubscription } from "@/hooks/useSubscription"
 import { useCVStore } from "@/hooks/useCVStore"
-import { BlueprintStatus } from "@/components/blueprint-status"
 import { useTheme } from "next-themes"
 import {
     DropdownMenu,
@@ -59,9 +58,6 @@ export function UserNav({ user }: UserNavProps) {
         <nav className="flex items-center gap-2">
             {/* Desktop Navigation - visible on md and up */}
             <div className="hidden md:flex items-center gap-3">
-                {/* Blueprint Status */}
-                <BlueprintStatus compact={true} />
-
                 {/* Navigation Links */}
                 <Link href="/analysis">
                     <Button variant="ghost" size="sm" className="gap-2">

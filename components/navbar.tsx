@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Button } from "@/components/ui/button"
@@ -15,28 +15,12 @@ import {
 import { supabase } from "@/lib/supabase"
 import { User, LogOut, LogIn, Sparkles, Menu, X, FileText, CreditCard } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { User as SupabaseUser } from '@supabase/supabase-js'
+import { useAuth } from "@/hooks/useAuth"
 
 export function Navbar() {
     const pathname = usePathname()
-    const [user, setUser] = useState<SupabaseUser | null>(null)
-    const [loading, setLoading] = useState(true)
+    const { user, isLoading: loading } = useAuth()
     const [isMenuOpen, setIsMenuOpen] = useState(false)
-
-    useEffect(() => {
-        // Check current user
-        supabase.auth.getUser().then(({ data: { user } }) => {
-            setUser(user)
-            setLoading(false)
-        })
-
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setUser(session?.user || null)
-        })
-
-        return () => subscription.unsubscribe()
-    }, [])
 
     const handleSignOut = async () => {
         await supabase.auth.signOut()

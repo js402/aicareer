@@ -7,11 +7,6 @@ import {
     deleteCVMetadata
 } from '@/lib/cv-metadata'
 
-// Mock cv-blueprint-merger to avoid OpenAI dependency
-vi.mock('@/lib/cv-blueprint-merger', () => ({
-    mergeCVIntoBlueprint: vi.fn().mockResolvedValue({})
-}))
-
 const mockSupabase = {
     from: vi.fn()
 }

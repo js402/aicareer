@@ -14,7 +14,6 @@ import { supabase } from "@/lib/supabase"
 import { useSubscription } from "@/hooks/useSubscription"
 import { getUserCVMetadata, updateCVMetadata, deleteCVMetadata } from "@/lib/api-client"
 import { CVMetadataEditForm } from "@/components/cv-metadata-edit-form"
-import { BlueprintViewer } from "@/components/blueprint-viewer"
 import type { CVMetadataResponse, ExtractedCVInfo } from "@/lib/api-client"
 
 export default function CVMetadataPage() {
@@ -22,17 +21,6 @@ export default function CVMetadataPage() {
     const { hasProAccess } = useSubscription()
     const { setCV, setAnalysis, setExtractedInfo, clear } = useCVStore()
     const [metadata, setMetadata] = useState<CVMetadataResponse[]>([])
-    const [blueprint, setBlueprint] = useState<{
-        profile_data: {
-            personal?: { name?: string; summary?: string }
-            contact?: { email?: string; phone?: string; location?: string; linkedin?: string; website?: string }
-            skills?: Array<{ name: string; confidence?: number }>
-            experience?: Array<{ role: string; company: string; duration: string; description?: string }>
-            education?: Array<{ degree: string; institution: string; year: string }>
-        }
-        confidence_score?: number
-        updated_at: string
-    } | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string>('')
     const [successMessage, setSuccessMessage] = useState<string>('')
@@ -45,13 +33,6 @@ export default function CVMetadataPage() {
         try {
             const result = await getUserCVMetadata()
             setMetadata(result.metadata)
-
-            // Also fetch blueprint
-            const blueprintResponse = await fetch('/api/blueprint')
-            if (blueprintResponse.ok) {
-                const blueprintData = await blueprintResponse.json()
-                setBlueprint(blueprintData)
-            }
         } catch (error) {
             console.error('Failed to load metadata:', error)
             setError('Failed to load CV metadata')
@@ -247,22 +228,9 @@ export default function CVMetadataPage() {
                     </Card>
                 )}
 
-                {/* Blueprint Section */}
-                <div className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                        <div>
-                            <h2 className="text-2xl font-bold">Your Professional Blueprint</h2>
-                            <p className="text-muted-foreground text-sm mt-1">
-                                Consolidated view of your CV data used for job matching and tailoring
-                            </p>
-                        </div>
-                    </div>
-                    <BlueprintViewer blueprint={blueprint} onUpdate={loadMetadata} />
-                </div>
-
                 {/* Individual CV Metadata Section */}
                 <div className="mb-4">
-                    <h2 className="text-2xl font-bold">Individual CV Uploads</h2>
+                    <h2 className="text-2xl font-bold">Your CV Uploads</h2>
                     <p className="text-muted-foreground text-sm mt-1">
                         Manage your uploaded CV files and their extracted metadata
                     </p>
@@ -319,6 +287,27 @@ export default function CVMetadataPage() {
                                                             {(item.confidence_score * 100).toFixed(0)}%
                                                         </div>
                                                     )}
+                                                </div>
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <input
+                                                        className="border rounded px-2 py-1 text-xs bg-white dark:bg-slate-900"
+                                                        placeholder="Name this CV"
+                                                        value={(item as any).display_name || ''}
+                                                        onChange={async (e) => {
+                                                            const name = e.target.value
+                                                            try {
+                                                                const res = await fetch(`/api/cv-metadata/${item.id}`, {
+                                                                    method: 'PUT',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ displayName: name })
+                                                                })
+                                                                if (res.ok) {
+                                                                    const updated = await res.json()
+                                                                    setMetadata((prev) => prev.map((x) => x.id === item.id ? updated.metadata : x))
+                                                                }
+                                                            } catch {}
+                                                        }}
+                                                    />
                                                 </div>
                                             </div>
                                         </div>

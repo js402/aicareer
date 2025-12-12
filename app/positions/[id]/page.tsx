@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,6 +13,7 @@ import { NotesCard } from "@/components/positions/NotesCard"
 import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { MatchScoreCircle } from "@/components/analysis/match-score-circle"
 import { EmailGenerator } from "@/components/positions/EmailGenerator"
+import { useFetch, useMutation } from "@/hooks/useFetch"
 
 import { useCVStore } from "@/hooks/useCVStore"
 import ReactMarkdown from 'react-markdown'
@@ -68,11 +69,8 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     const router = useRouter()
     const { content: cvContent } = useCVStore()
 
-    const [position, setPosition] = useState<Position | null>(null)
-    const [isLoading, setIsLoading] = useState(true)
-    const [isUpdating, setIsUpdating] = useState(false)
-    const [isGenerating, setIsGenerating] = useState(false)
     const [notes, setNotes] = useState('')
+    const [isGenerating, setIsGenerating] = useState(false)
 
     // View Modal State
     const [viewingCV, setViewingCV] = useState<TailoredCV | null>(null)
@@ -81,66 +79,46 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     // Delete Confirmation Dialog State
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
-    useEffect(() => {
-        const fetchPosition = async () => {
-            try {
-                const response = await fetch(`/api/job-positions/${id}`)
-                if (response.ok) {
-                    const data = await response.json()
-                    setPosition(data)
-                    setNotes(data.notes || '')
-                }
-            } catch (error) {
-                console.error('Error fetching position:', error)
-            } finally {
-                setIsLoading(false)
-            }
+    // Fetch position
+    const { data: position, isLoading, refetch } = useFetch<Position>(
+        `/api/job-positions/${id}`,
+        {
+            onSuccess: (data) => setNotes(data.notes || '')
         }
+    )
 
-        fetchPosition()
-    }, [id])
+    // Mutation hooks for status and notes updates
+    const { mutate: updateStatus, isLoading: isUpdating } = useMutation<{ status: string }, Position>(
+        `/api/job-positions/${id}`,
+        'PATCH'
+    )
 
-    const handleStatusChange = async (newStatus: string) => {
+    const { mutate: updateNotes, isLoading: isUpdatingNotes } = useMutation<{ notes: string }, Position>(
+        `/api/job-positions/${id}`,
+        'PATCH'
+    )
+
+    const handleStatusChange = useCallback(async (newStatus: string) => {
         if (!position) return
 
         try {
-            setIsUpdating(true)
-            const response = await fetch(`/api/job-positions/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus })
-            })
-
-            if (response.ok) {
-                setPosition({ ...position, status: newStatus })
-            }
+            await updateStatus({ status: newStatus })
+            await refetch()
         } catch (error) {
             console.error('Error updating status:', error)
-        } finally {
-            setIsUpdating(false)
         }
-    }
+    }, [position, updateStatus, refetch])
 
-    const handleNotesSave = async () => {
+    const handleNotesSave = useCallback(async () => {
         if (!position) return
 
         try {
-            setIsUpdating(true)
-            const response = await fetch(`/api/job-positions/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ notes })
-            })
-
-            if (response.ok) {
-                setPosition({ ...position, notes })
-            }
+            await updateNotes({ notes })
+            await refetch()
         } catch (error) {
             console.error('Error updating notes:', error)
-        } finally {
-            setIsUpdating(false)
         }
-    }
+    }, [position, notes, updateNotes, refetch])
 
 
     const handleDeleteClick = () => {
@@ -207,12 +185,7 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
 
             if (!saveRes.ok) throw new Error('Failed to save tailored CV')
             const savedCV = await saveRes.json()
-
-            // Update local state
-            setPosition({
-                ...position,
-                tailored_cvs: [savedCV, ...position.tailored_cvs]
-            })
+            await refetch()
 
         } catch (error) {
             console.error('Error generating tailored CV:', error)
@@ -273,15 +246,7 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
             })
 
             if (response.ok) {
-                // Update local state: set submitted_cv_id and status
-                // We need to cast or update the type locally if we want strict typing, 
-                // but for now we can just update the state object
-                setPosition(prev => prev ? ({
-                    ...prev,
-                    submitted_cv_id: cvId,
-                    status: 'applied',
-                    applied_date: new Date().toISOString()
-                } as any) : null)
+                await refetch()
             }
         } catch (error) {
             console.error('Error marking CV as submitted:', error)

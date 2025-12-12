@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,6 +14,19 @@ import { MatchScoreCircle } from "@/components/analysis/match-score-circle"
 import { JobMatchAnalysis } from "@/components/analysis/JobMatchAnalysis"
 import { ErrorAlert } from "@/components/analysis/error-alert"
 import { Input } from "@/components/ui/input"
+import { useFetch } from "@/hooks/useFetch"
+
+interface CVMetadata {
+    id: string
+    display_name?: string
+    filename?: string
+    confidence_score?: number
+    created_at: string
+}
+
+interface CVMetadataResponse {
+    metadata: CVMetadata[]
+}
 
 export default function JobMatchPage() {
     const router = useRouter()
@@ -49,6 +62,7 @@ export default function JobMatchPage() {
     const [matchError, setMatchError] = useState('')
     const [isSaving, setIsSaving] = useState(false)
     const [trackError, setTrackError] = useState('')
+    const [selectedCvId, setSelectedCvId] = useState<string>('')
 
     // Local state for editing metadata before saving
     const [editedMetadata, setEditedMetadata] = useState({
@@ -59,6 +73,26 @@ export default function JobMatchPage() {
         employment_type: '',
         seniority_level: ''
     })
+
+    // Fetch CV list
+    const { data: cvResponse } = useFetch<CVMetadataResponse>('/api/cv-metadata')
+    const cvList = cvResponse?.metadata || []
+
+    // Compute suggested CV
+    const suggestedCvId = useMemo(() => {
+        const best = [...cvList].sort((a, b) => 
+            (b.confidence_score ?? 0) - (a.confidence_score ?? 0) || 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )[0]
+        return best?.id || ''
+    }, [cvList])
+
+    // Auto-select suggested CV on first load
+    useEffect(() => {
+        if (suggestedCvId && !selectedCvId) {
+            setSelectedCvId(suggestedCvId)
+        }
+    }, [suggestedCvId, selectedCvId])
 
     useAuthGuard({ redirectTo: 'analysis/job-match', requireCV: true, cvContent })
 
@@ -74,8 +108,8 @@ export default function JobMatchPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    cvContent,
-                    jobDescription
+                    jobDescription,
+                    cvMetadataId: selectedCvId || suggestedCvId
                 })
             })
 
@@ -172,16 +206,36 @@ export default function JobMatchPage() {
                         <div className="space-y-6">
                             {!matchResult && (
                                 <>
-                                    <div className="relative">
-                                        <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
-                                            Job Description
-                                        </label>
-                                        <textarea
-                                            className="w-full min-h-[200px] p-4 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
-                                            placeholder="Paste the full job description here..."
-                                            value={jobDescription}
-                                            onChange={(e) => setJobDescription(e.target.value)}
-                                        />
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                            <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Base CV</label>
+                                            <Select value={selectedCvId} onValueChange={setSelectedCvId}>
+                                                <SelectTrigger className="bg-white dark:bg-slate-950">
+                                                    <SelectValue placeholder={suggestedCvId ? 'Suggested CV selected' : 'Select a CV'} />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {cvList.map((cv) => (
+                                                        <SelectItem key={cv.id} value={cv.id}>
+                                                            {(cv.display_name || cv.filename || 'CV')} • {(cv.confidence_score ? `${Math.round(cv.confidence_score * 100)}%` : 'Unrated')}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {suggestedCvId && selectedCvId !== suggestedCvId && (
+                                                <Button variant="outline" size="sm" className="mt-2" onClick={() => setSelectedCvId(suggestedCvId)}>
+                                                    Use Suggested CV
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Job Description</label>
+                                            <textarea
+                                                className="w-full min-h-[200px] p-4 rounded-xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm transition-all"
+                                                placeholder="Paste the full job description here..."
+                                                value={jobDescription}
+                                                onChange={(e) => setJobDescription(e.target.value)}
+                                            />
+                                        </div>
                                     </div>
 
                                     <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">

@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { withAuth } from '@/lib/api-middleware'
 import type { ExtractedCVInfo } from '@/lib/api-client'
-import { removeCVFromBlueprint } from '@/lib/cv-blueprint-merger'
 
 // PUT /api/cv-metadata/[id] - Update CV metadata
 export const PUT = withAuth(async (request, { supabase, user }) => {
     try {
         const id = request.nextUrl.pathname.split('/').pop() || ''
-        const { extractedInfo } = await request.json()
+        const body = await request.json()
+        const { extractedInfo, displayName } = body
 
-        if (!extractedInfo) {
+        if (!extractedInfo && !displayName) {
             return NextResponse.json(
-                { error: 'extractedInfo is required' },
+                { error: 'extractedInfo or displayName is required' },
                 { status: 400 }
             )
         }
@@ -39,12 +39,15 @@ export const PUT = withAuth(async (request, { supabase, user }) => {
         }
 
         // Update the metadata
+        const updatePayload: any = {
+            updated_at: new Date().toISOString()
+        }
+        if (extractedInfo) updatePayload.extracted_info = extractedInfo
+        if (displayName) updatePayload.display_name = displayName
+
         const { data, error } = await supabase
             .from('cv_metadata')
-            .update({
-                extracted_info: extractedInfo,
-                updated_at: new Date().toISOString()
-            })
+            .update(updatePayload)
             .eq('id', id)
             .select()
             .single()
@@ -105,16 +108,6 @@ export const DELETE = withAuth(async (request, { supabase, user }) => {
                 { error: 'Failed to delete metadata' },
                 { status: 500 }
             )
-        }
-
-        // Remove from blueprint
-        try {
-            if (existingMetadata.cv_hash) {
-                await removeCVFromBlueprint(supabase, user.id, existingMetadata.cv_hash)
-            }
-        } catch (blueprintError) {
-            console.error('Error updating blueprint on delete:', blueprintError)
-            // Don't fail the request since the CV deletion succeeded
         }
 
         return NextResponse.json({ success: true })

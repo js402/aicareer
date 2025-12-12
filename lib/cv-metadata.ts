@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { ExtractedCVInfo } from './api-client'
-import { mergeCVIntoBlueprint } from './cv-blueprint-merger'
 
 /**
  * Get cached CV metadata
@@ -31,6 +30,13 @@ export async function storeCVMetadata(
     extractionStatus: 'completed' | 'partial' | 'failed' = 'completed',
     confidenceScore?: number
 ) {
+    const autoName = (() => {
+        const dateStr = new Date().toISOString().slice(0, 10)
+        const summary = (extractedInfo as any)?.summary || ''
+        const topRole = (extractedInfo as any)?.primaryFunctions?.[0] || ''
+        const base = topRole || summary || 'CV'
+        return `${base} - ${dateStr}`
+    })()
     const { data, error } = await supabase
         .from('cv_metadata')
         .upsert({
@@ -39,6 +45,7 @@ export async function storeCVMetadata(
             extracted_info: extractedInfo,
             extraction_status: extractionStatus,
             confidence_score: confidenceScore,
+            display_name: autoName,
         })
         .select()
         .single()
@@ -46,16 +53,6 @@ export async function storeCVMetadata(
     if (error) {
         console.error('Error storing CV metadata:', error)
         throw error
-    }
-
-    // Automatically update the blueprint with the new CV data
-    if (extractionStatus === 'completed' || extractionStatus === 'partial') {
-        try {
-            await mergeCVIntoBlueprint(supabase, userId, extractedInfo, cvHash)
-        } catch (mergeError) {
-            console.error('Failed to update blueprint:', mergeError)
-            // Don't throw - we still stored the metadata successfully
-        }
     }
 
     return data

@@ -68,15 +68,60 @@ Return JSON with this EXACT structure:
 
 Be specific with numbers, timelines, and resources. Provide actionable, data-driven guidance.`
 
-// Step 3: Validate Output Structure
-const OUTPUT_VALIDATION_PROMPT = `Validate that the career guidance JSON has all required fields and proper structure.
+// Step 3: Validate Output Structure (without LLM)
+function validateGuidanceStructure(guidance: any): { isValid: boolean; missingFields: string[]; structureIssues: string[] } {
+    const missingFields: string[] = []
+    const structureIssues: string[] = []
 
-Return JSON:
-{
-  "isValid": boolean,
-  "missingFields": string[],
-  "structureIssues": string[]
-}`
+    // Check strategicPath
+    if (!guidance.strategicPath) {
+        missingFields.push('strategicPath')
+    } else {
+        if (!guidance.strategicPath.currentPosition) missingFields.push('strategicPath.currentPosition')
+        if (!Array.isArray(guidance.strategicPath.shortTerm)) missingFields.push('strategicPath.shortTerm')
+        if (!Array.isArray(guidance.strategicPath.midTerm)) missingFields.push('strategicPath.midTerm')
+        if (!Array.isArray(guidance.strategicPath.longTerm)) missingFields.push('strategicPath.longTerm')
+    }
+
+    // Check marketValue
+    if (!guidance.marketValue) {
+        missingFields.push('marketValue')
+    } else {
+        if (!guidance.marketValue.salaryRange) {
+            missingFields.push('marketValue.salaryRange')
+        } else {
+            if (typeof guidance.marketValue.salaryRange.min !== 'number') missingFields.push('marketValue.salaryRange.min')
+            if (typeof guidance.marketValue.salaryRange.max !== 'number') missingFields.push('marketValue.salaryRange.max')
+            if (!guidance.marketValue.salaryRange.currency) missingFields.push('marketValue.salaryRange.currency')
+        }
+        if (!guidance.marketValue.marketDemand) missingFields.push('marketValue.marketDemand')
+        if (!Array.isArray(guidance.marketValue.competitiveAdvantages)) missingFields.push('marketValue.competitiveAdvantages')
+        if (!Array.isArray(guidance.marketValue.negotiationTips)) missingFields.push('marketValue.negotiationTips')
+    }
+
+    // Check skillGap
+    if (!guidance.skillGap) {
+        missingFields.push('skillGap')
+    } else {
+        if (!Array.isArray(guidance.skillGap.critical)) {
+            missingFields.push('skillGap.critical')
+        } else {
+            guidance.skillGap.critical.forEach((item: any, i: number) => {
+                if (!item.skill) structureIssues.push(`skillGap.critical[${i}] missing skill`)
+                if (!item.priority) structureIssues.push(`skillGap.critical[${i}] missing priority`)
+            })
+        }
+        if (!Array.isArray(guidance.skillGap.recommended)) {
+            missingFields.push('skillGap.recommended')
+        }
+    }
+
+    return {
+        isValid: missingFields.length === 0 && structureIssues.length === 0,
+        missingFields,
+        structureIssues
+    }
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -182,20 +227,8 @@ ${JSON.stringify(careerInfo, null, 2)}`
             throw new Error('Failed to generate career guidance')
         }
 
-        // STEP 3: Validate output structure
-        const validationCompletion = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
-            messages: [
-                { role: 'system', content: OUTPUT_VALIDATION_PROMPT },
-                {
-                    role: 'user', content: `Validate this guidance:
-${JSON.stringify(guidance, null, 2)}`
-                }
-            ],
-            response_format: { type: 'json_object' },
-            temperature: 0.1,
-        })
-        const validation = JSON.parse(validationCompletion.choices[0].message.content || '{}')
+        // STEP 3: Validate output structure (no LLM call needed)
+        const validation = validateGuidanceStructure(guidance)
 
         if (!validation.isValid) {
             console.warn('Guidance validation issues:', validation)

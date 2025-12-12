@@ -17,6 +17,58 @@ export const extractCVMetadataSchema = z.object({
 })
 
 // Job position schemas
+// Helper to normalize employment type from LLM output
+const normalizeEmploymentType = z.string().nullable().optional().transform((val) => {
+  if (!val || val.trim() === '') return null
+  const normalized = val.toLowerCase().trim()
+  const mapping: Record<string, string> = {
+    'full-time': 'full-time',
+    'fulltime': 'full-time',
+    'full time': 'full-time',
+    'part-time': 'part-time',
+    'parttime': 'part-time',
+    'part time': 'part-time',
+    'contract': 'contract',
+    'contractor': 'contract',
+    'freelance': 'freelance',
+    'freelancer': 'freelance',
+    'internship': 'internship',
+    'intern': 'internship',
+  }
+  return mapping[normalized] || null
+})
+
+// Helper to normalize seniority level from LLM output
+const normalizeSeniorityLevel = z.string().nullable().optional().transform((val) => {
+  if (!val || val.trim() === '') return null
+  const normalized = val.toLowerCase().trim()
+  const mapping: Record<string, string> = {
+    'entry': 'entry',
+    'entry-level': 'entry',
+    'entry level': 'entry',
+    'junior': 'junior',
+    'jr': 'junior',
+    'mid': 'mid',
+    'mid-level': 'mid',
+    'mid level': 'mid',
+    'middle': 'mid',
+    'senior': 'senior',
+    'sr': 'senior',
+    'lead': 'lead',
+    'team lead': 'lead',
+    'tech lead': 'lead',
+    'principal': 'principal',
+    'staff': 'principal',
+    'executive': 'executive',
+    'director': 'executive',
+    'vp': 'executive',
+    'c-level': 'executive',
+    'cto': 'executive',
+    'ceo': 'executive',
+  }
+  return mapping[normalized] || null
+})
+
 export const createJobPositionSchema = z.object({
   company_name: nonEmptyString.max(100, 'Company name is too long'),
   position_title: nonEmptyString.max(100, 'Position title is too long'),
@@ -30,8 +82,8 @@ export const createJobPositionSchema = z.object({
   recommendations: z.array(z.string()).optional(),
   experience_alignment: z.any().optional(),
   responsibility_alignment: z.any().optional(),
-  employment_type: z.enum(['full-time', 'part-time', 'contract', 'freelance', 'internship']).nullable().optional(),
-  seniority_level: z.enum(['entry', 'junior', 'mid', 'senior', 'lead', 'principal', 'executive']).nullable().optional()
+  employment_type: normalizeEmploymentType,
+  seniority_level: normalizeSeniorityLevel
 })
 
 export const updateJobPositionSchema = z.object({
@@ -52,24 +104,14 @@ export const careerGuidanceSchema = z.object({
 export const tailorCVSchema = z.object({
   jobDescription: nonEmptyString.max(10000, 'Job description is too long'),
   matchAnalysis: z.any().optional(), // Analysis from job match evaluation
-  additionalInstructions: z.string().max(1000, 'Instructions are too long').optional()
-})
-
-// Blueprint processing schemas
-export const processCVBlueprintSchema = z.object({
-  cvContent: z.string().min(10, 'CV content must be at least 10 characters').max(50000, 'CV content is too large'),
-  metadata: z.object({
-    name: z.string().optional(),
-    contactInfo: z.any().optional(),
-    experience: z.array(z.any()).optional(),
-    skills: z.array(z.string()).optional(),
-    education: z.array(z.any()).optional()
-  }).optional()
+  additionalInstructions: z.string().max(1000, 'Instructions are too long').optional(),
+  cvMetadataId: z.string().uuid().optional() // Optional: specify which CV to tailor
 })
 
 // Job match evaluation schemas
 export const evaluateJobMatchSchema = z.object({
-  jobDescription: z.string().min(10, 'Job description must be at least 10 characters').max(10000, 'Job description is too long')
+  jobDescription: z.string().min(10, 'Job description must be at least 10 characters').max(10000, 'Job description is too long'),
+  cvMetadataId: z.string().uuid().optional() // Optional: specify which CV to evaluate
 })
 
 // CV metadata schemas
@@ -133,7 +175,6 @@ export type CreateJobPositionInput = z.infer<typeof createJobPositionSchema>
 export type UpdateJobPositionInput = z.infer<typeof updateJobPositionSchema>
 export type CareerGuidanceInput = z.infer<typeof careerGuidanceSchema>
 export type TailorCVInput = z.infer<typeof tailorCVSchema>
-export type ProcessCVBlueprintInput = z.infer<typeof processCVBlueprintSchema>
 export type EvaluateJobMatchInput = z.infer<typeof evaluateJobMatchSchema>
 export type UpdateCVMetadataInput = z.infer<typeof updateCVMetadataSchema>
 export type ParseContactInfoInput = z.infer<typeof parseContactInfoSchema>

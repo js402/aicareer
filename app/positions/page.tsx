@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Navbar } from "@/components/navbar"
@@ -9,6 +8,8 @@ import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { PositionCard } from "@/components/positions/position-card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useFetch } from "@/hooks/useFetch"
+import { useState, useMemo } from "react"
 
 interface Position {
     id: string
@@ -20,39 +21,31 @@ interface Position {
     created_at: string
 }
 
+interface PositionsResponse {
+    positions: Position[]
+}
+
 export default function PositionsPage() {
     useAuthGuard({ redirectTo: 'positions' })
 
-    const [positions, setPositions] = useState<Position[]>([])
-    const [isLoading, setIsLoading] = useState(true)
     const [filterStatus, setFilterStatus] = useState('all')
     const [searchQuery, setSearchQuery] = useState('')
+    
+    const { data: response, isLoading } = useFetch<PositionsResponse>(
+        '/api/job-positions'
+    )
 
-    useEffect(() => {
-        const fetchPositions = async () => {
-            try {
-                const response = await fetch('/api/job-positions')
-                if (response.ok) {
-                    const data = await response.json()
-                    setPositions(data.positions)
-                }
-            } catch (error) {
-                console.error('Error fetching positions:', error)
-            } finally {
-                setIsLoading(false)
-            }
-        }
+    const positions = response?.positions || []
 
-        fetchPositions()
-    }, [])
-
-    const filteredPositions = positions.filter(position => {
-        const matchesStatus = filterStatus === 'all' || position.status === filterStatus
-        const matchesSearch =
-            position.company_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            position.position_title.toLowerCase().includes(searchQuery.toLowerCase())
-        return matchesStatus && matchesSearch
-    })
+    const filteredPositions = useMemo(() => {
+        return positions.filter(position => {
+            const matchesStatus = filterStatus === 'all' || position.status === filterStatus
+            const matchesSearch =
+                position.company_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                position.position_title.toLowerCase().includes(searchQuery.toLowerCase())
+            return matchesStatus && matchesSearch
+        })
+    }, [positions, filterStatus, searchQuery])
 
     return (
         <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
