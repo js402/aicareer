@@ -25,3 +25,46 @@ export const GET = withAuth(async (request, { supabase, user }) => {
         )
     }
 })
+
+// POST /api/cv-metadata - Create a new CV entry
+export const POST = withAuth(async (request, { supabase, user }) => {
+    try {
+        const { content, filename } = await request.json()
+
+        if (!content) {
+            return NextResponse.json(
+                { error: 'Content is required' },
+                { status: 400 }
+            )
+        }
+
+        // Generate SHA-256 hash for the content
+        const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(content))
+        const hashArray = Array.from(new Uint8Array(hashBuffer))
+        const cvHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+
+        const { data, error } = await supabase
+            .from('cv_metadata')
+            .upsert({
+                user_id: user.id,
+                cv_hash: cvHash,
+                cv_content: content,
+                display_name: filename || 'Untitled CV',
+                extraction_status: 'pending', // Pending full analysis
+                extracted_info: {}, // Empty until analyzed
+                source_type: 'uploaded'
+            })
+            .select()
+            .single()
+
+        if (error) throw error
+
+        return NextResponse.json(data)
+    } catch (error) {
+        console.error('Error creating CV:', error)
+        return NextResponse.json(
+            { error: 'Failed to create CV' },
+            { status: 500 }
+        )
+    }
+})

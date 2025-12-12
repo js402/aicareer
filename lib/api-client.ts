@@ -280,12 +280,129 @@ export async function renameCVMetadata(metadataId: string, displayName: string):
     return response.json()
 }
 
-export async function deleteCVMetadata(metadataId: string): Promise<void> {
-    const response = await fetch(`/api/cv-metadata/${metadataId}`, {
+
+
+// Career Guidance API
+export interface CareerGuidancePayload {
+    cvContent?: string
+    extractedInfo?: ExtractedCVInfo
+}
+
+export async function generateCareerGuidance(payload: CareerGuidancePayload): Promise<{ guidance: any }> {
+    const response = await fetch('/api/career-guidance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to generate career guidance')
+    }
+
+    return response.json()
+}
+
+export async function generateCareerPathSuggestions(payload: CareerGuidancePayload): Promise<{ suggestions: any }> {
+    const response = await fetch('/api/career-path-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to generate suggestions')
+    }
+
+    return response.json()
+}
+
+// Job Positions API
+export interface UpdateJobPositionPayload {
+    status?: string
+    notes?: string
+    cv_metadata_id?: string
+    match_score?: number
+    matching_skills?: string[]
+    missing_skills?: string[]
+    recommendations?: string[]
+    experience_alignment?: any
+    responsibility_alignment?: any
+}
+
+export async function getJobPosition(id: string): Promise<any> {
+    const response = await fetch(`/api/job-positions/${id}`)
+
+    if (!response.ok) {
+        throw new Error('Failed to fetch position')
+    }
+
+    return response.json()
+}
+
+export async function updateJobPosition(id: string, payload: UpdateJobPositionPayload): Promise<any> {
+    const response = await fetch(`/api/job-positions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+        throw new Error('Failed to update position')
+    }
+
+    return response.json()
+}
+
+export async function deleteJobPosition(id: string): Promise<void> {
+    const response = await fetch(`/api/job-positions/${id}`, {
         method: 'DELETE',
     })
 
     if (!response.ok) {
-        throw new Error('Failed to delete CV metadata')
+        throw new Error('Failed to delete position')
     }
+}
+
+export interface EvaluateJobMatchPayload {
+    cvMetadataId: string
+    jobDescription: string
+}
+
+export async function evaluateJobMatch(payload: EvaluateJobMatchPayload): Promise<any> {
+    const response = await fetch('/api/evaluate-job-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+        throw new Error('Failed to evaluate job match')
+    }
+
+    return response.json()
+}
+
+export interface TailorCVPayload {
+    cvMetadataId: string
+    jobDescription: string
+    jobPositionId?: string
+    companyName?: string
+    positionTitle?: string
+    matchAnalysis?: any
+}
+
+export async function tailorCV(payload: TailorCVPayload): Promise<any> {
+    const response = await fetch('/api/tailor-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    })
+
+    if (!response.ok) {
+        throw new Error('Failed to tailor CV')
+    }
+
+    return response.json()
 }

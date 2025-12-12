@@ -17,21 +17,25 @@ export default function OnboardingPage() {
     const [status, setStatus] = useState<'initializing' | 'processing' | 'success' | 'error'>('initializing')
     const processedRef = useRef(false)
 
+    // 1. Check Auth
     useEffect(() => {
-        const checkAuthAndProcess = async () => {
-            if (processedRef.current) return
-
-            // 1. Check Auth
+        const checkAuth = async () => {
             const { data: { session } } = await supabase.auth.getSession()
             if (!session) {
                 router.push('/auth?redirect=onboarding')
-                return
             }
+        }
+        checkAuth()
+    }, [router])
+
+    useEffect(() => {
+        const processCV = async () => {
+            if (processedRef.current) return
+            // Wait for auth check implicitly by assuming if we are here we are checking
+            // Ideally we rely on useAuthGuard but this page is special
 
             // 2. Check Content
             if (!cvContent) {
-                // Nothing to ingest, maybe they came here by mistake or already synced
-                // Redirect to dashboard or metadata list
                 router.replace('/cv-metadata')
                 return
             }
@@ -41,6 +45,7 @@ export default function OnboardingPage() {
             setStatus('processing')
 
             try {
+                // Use the extractMetadata from cvOperations which effectively calls API
                 const result = await extractMetadata(cvContent)
 
                 if (result && result.metadataId) {
@@ -62,7 +67,10 @@ export default function OnboardingPage() {
             }
         }
 
-        checkAuthAndProcess()
+        // Only run if we have content
+        if (cvContent) {
+            processCV()
+        }
     }, [cvContent, router, extractMetadata, setSyncedCV])
 
     return (

@@ -3,6 +3,40 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { withAuth } from '@/lib/api-middleware'
 import type { ExtractedCVInfo } from '@/lib/api-client'
 
+// GET /api/cv-metadata/[id] - Get single CV metadata
+export const GET = withAuth(async (request, { supabase, user }) => {
+    try {
+        const id = request.nextUrl.pathname.split('/').pop() || ''
+
+        const { data, error } = await supabase
+            .from('cv_metadata')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+        if (error || !data) {
+            return NextResponse.json(
+                { error: 'CV not found' },
+                { status: 404 }
+            )
+        }
+
+        if (data.user_id !== user.id) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 403 }
+            )
+        }
+
+        return NextResponse.json({ metadata: data })
+    } catch (error) {
+        return NextResponse.json(
+            { error: 'Failed to fetch CV' },
+            { status: 500 }
+        )
+    }
+})
+
 // PUT /api/cv-metadata/[id] - Update CV metadata
 export const PUT = withAuth(async (request, { supabase, user }) => {
     try {

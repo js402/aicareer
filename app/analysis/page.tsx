@@ -20,6 +20,8 @@ import { StatusAlert } from "@/components/ui/status-alert"
 import { useCVOperations } from "@/hooks/useCVOperations"
 import { CVEditorModal, validateCV } from "@/components/cv-editor"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useUpdateCVMetadataAction } from "@/hooks/useCVMetadata"
+import { useCVDetail } from "@/hooks/useCVDetail"
 
 export default function AnalysisPage() {
     const router = useRouter()
@@ -95,36 +97,16 @@ export default function AnalysisPage() {
     }, [isMounted, cvContent, extractedInfo, hasProAccess, cvOperations])
 
     // Rehydrate from DB if we have ID but no data (e.g. fresh login/reload)
-    useEffect(() => {
-        if (isMounted && metadataId && !extractedInfo && !cvOperations.isLoading) {
-            // We use a specific fetcher or the existing extract-metadata (which handles cache)
-            // But simpler might be to use retrieve-analysis logic or just wait for user to click
-            // Actually, we want to auto-load.
-            // Let's use `checkAuthAndLoad` to trigger a fetch if needed, 
-            // but `useCVOperations` has `loadAnalysisFromMetadata` which takes a hash.
-            // We have the ID, not the hash. 
-            // Ideally we should have a `getCV(id)` method. 
-            // For now, let's assume the component will handle missing data by asking to "Edit Profile" 
-            // or similar, OR we should implement a fetch by ID. 
-            // Given the current hooks, `retrieve-analysis` is by hash.
-            // Let's use the `cv-metadata` API to fetch by ID.
-            const fetchCV = async () => {
-                try {
-                    const res = await fetch(`/api/cv-metadata/${metadataId}`)
-                    if (res.ok) {
-                        const data = await res.json()
-                        // Update store without clearing ID
-                        updateExtractedInfo(data.extracted_info)
-                        // If we stored content in DB, we could fetch it too if we wanted to display "Raw CV"
-                        // But the requirement is "use selected CV from DB".
-                    }
-                } catch (e) {
-                    console.error("Failed to rehydrate CV", e)
+    const { isLoading: isHydrating } = useCVDetail(
+        isMounted && metadataId && !extractedInfo ? metadataId : null,
+        {
+            onSuccess: (data) => {
+                if (data.metadata?.extracted_info) {
+                    updateExtractedInfo(data.metadata.extracted_info)
                 }
             }
-            fetchCV()
         }
-    }, [isMounted, metadataId, extractedInfo, cvOperations.isLoading, updateExtractedInfo])
+    )
 
     // Auto-open editor only if validation fails AND we have data
     useEffect(() => {
@@ -164,20 +146,15 @@ export default function AnalysisPage() {
         downloadTextFile(cvContent, filename)
     }
 
+    const { mutate: updateMetadata } = useUpdateCVMetadataAction()
+
     const handleSaveCVEdits = async (updatedInfo: typeof extractedInfo) => {
         if (!updatedInfo) return
         updateExtractedInfo(updatedInfo)
 
         if (metadataId) {
             try {
-                const response = await fetch(`/api/cv-metadata/${metadataId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ extractedInfo: updatedInfo })
-                })
-                if (!response.ok) {
-                    console.error('Failed to save CV edits to database')
-                }
+                await updateMetadata({ id: metadataId, extractedInfo: updatedInfo })
             } catch (error) {
                 console.error('Error saving CV edits:', error)
             }

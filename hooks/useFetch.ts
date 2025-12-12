@@ -28,11 +28,11 @@ export function useFetch<T = any>(
     const [isLoading, setIsLoading] = useState(!options.skip)
     const [error, setError] = useState<Error | null>(null)
     const abortControllerRef = useRef<AbortController | null>(null)
-    
+
     // Use refs for callbacks to avoid infinite re-render loops
     const onSuccessRef = useRef(options.onSuccess)
     const onErrorRef = useRef(options.onError)
-    
+
     // Keep refs in sync with latest callbacks
     useEffect(() => {
         onSuccessRef.current = options.onSuccess
@@ -140,6 +140,64 @@ export function useMutation<T = any, R = any>(
             }
         },
         [url, method, options]
+    )
+
+
+    return { mutate, isLoading, error, data }
+}
+
+/**
+ * Hook for wrapping async actions (promises) with loading/error state
+ */
+export interface UseAsyncActionOptions<T, R> {
+    onSuccess?: (data: R) => void
+    onError?: (error: Error) => void
+}
+
+export interface UseAsyncActionResult<T, R> {
+    mutate: (payload: T) => Promise<R>
+    isLoading: boolean
+    error: Error | null
+    data: R | null
+}
+
+export function useAsyncAction<T = any, R = any>(
+    action: (payload: T) => Promise<R>,
+    options: UseAsyncActionOptions<T, R> = {}
+): UseAsyncActionResult<T, R> {
+    const [isLoading, setIsLoading] = useState(false)
+    const [error, setError] = useState<Error | null>(null)
+    const [data, setData] = useState<R | null>(null)
+
+    // Use refs to avoid dependency loops if action/options are unstable
+    const actionRef = useRef(action)
+    const optionsRef = useRef(options)
+
+    useEffect(() => {
+        actionRef.current = action
+        optionsRef.current = options
+    })
+
+    const mutate = useCallback(
+        async (payload: T): Promise<R> => {
+            setIsLoading(true)
+            setError(null)
+
+            try {
+                const result = await actionRef.current(payload)
+                setData(result)
+                optionsRef.current.onSuccess?.(result)
+                return result
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err))
+                setError(error)
+                optionsRef.current.onError?.(error)
+                throw error
+            } finally {
+                setIsLoading(false)
+            }
+        },
+        []
     )
 
     return { mutate, isLoading, error, data }

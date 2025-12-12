@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Loader2, Sparkles, Target, TrendingUp, AlertTriangle, Map, Award, FileText } from "lucide-react"
-import { analyzeCV } from "@/lib/api-client"
+import { useAnalyzeCV } from "@/hooks/useAnalysis"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { parseAnalysisSections } from "@/lib/analysis-utils"
@@ -25,26 +25,19 @@ const getSectionIcon = (title: string) => {
 }
 
 export function AIAnalysisCard({ cvContent }: AIAnalysisCardProps) {
-    const [isAnalyzing, setIsAnalyzing] = useState(false)
     const [analysis, setAnalysis] = useState<string>('')
-    const [analysisError, setAnalysisError] = useState<string>('')
-
-    const handleAnalyze = async () => {
-        if (!cvContent) return
-
-        setIsAnalyzing(true)
-        setAnalysisError('')
-
-        try {
-            const result = await analyzeCV(cvContent)
-            setAnalysis(result.analysis || '')
-        } catch (err) {
-            console.error('Analysis error:', err)
-            setAnalysisError(err instanceof Error ? err.message : 'Failed to analyze CV')
-        } finally {
-            setIsAnalyzing(false)
+    const { mutate: analyze, isLoading: isAnalyzing, error } = useAnalyzeCV({
+        onSuccess: (data) => {
+            if (data.analysis) setAnalysis(data.analysis)
         }
+    })
+
+    const handleAnalyze = () => {
+        if (!cvContent) return
+        analyze({ cvContent })
     }
+
+    const analysisError = error ? (error instanceof Error ? error.message : 'Failed to analyze CV') : ''
 
     return (
         <Card>

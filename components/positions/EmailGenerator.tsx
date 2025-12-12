@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Mail, Copy, Check, Loader2, Sparkles, AlertCircle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { useGenerateEmail } from '@/hooks/useEmailGenerator'
 
 interface EmailGeneratorProps {
     jobDescription: string
@@ -25,6 +26,13 @@ export function EmailGenerator({ jobDescription, cvMetadataId, companyName, posi
     const [isGenerating, setIsGenerating] = useState(false)
     const [emailBody, setEmailBody] = useState('')
     const [isCopied, setIsCopied] = useState(false)
+    const { mutate: generateEmail, isLoading: isHookGenerating } = useGenerateEmail()
+
+    // Use hook's loading state or keep local one if we do more logic. 
+    // The original code set isGenerating to true/false. 
+    // We can use the hook's ISLoading, or just sync.
+    // Let's use the local state to match existing behavior accurately or replace it.
+    // simpler to replace manual fetch.
 
     const handleGenerate = async () => {
         if (!cvMetadataId) {
@@ -38,24 +46,17 @@ export function EmailGenerator({ jobDescription, cvMetadataId, companyName, posi
 
         setIsGenerating(true)
         try {
-            const response = await fetch('/api/generate-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jobDescription,
-                    cvMetadataId,
-                    mode,
-                    companyName,
-                    positionTitle,
-                    tone,
-                    length,
-                    focus
-                })
+            const data = await generateEmail({
+                jobDescription,
+                cvMetadataId,
+                mode,
+                companyName,
+                positionTitle,
+                tone,
+                length,
+                focus
             })
 
-            if (!response.ok) throw new Error('Failed to generate email')
-
-            const data = await response.json()
             setEmailBody(data.emailBody)
         } catch (error) {
             console.error(error)

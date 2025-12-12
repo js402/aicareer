@@ -14,7 +14,15 @@ import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { useSubscription } from "@/hooks/useSubscription"
 import { MatchScoreCircle } from "@/components/analysis/match-score-circle"
 import { EmailGenerator } from "@/components/positions/EmailGenerator"
-import { useFetch, useMutation } from "@/hooks/useFetch"
+import { useAsyncAction } from "@/hooks/useFetch"
+import { useCVMetadataList } from "@/hooks/useCVMetadata"
+import { usePosition } from "@/hooks/usePosition"
+import {
+    updateJobPosition,
+    deleteJobPosition,
+    evaluateJobMatch,
+    tailorCV
+} from "@/lib/api-client"
 
 import { useCVStore } from "@/hooks/useCVStore"
 import ReactMarkdown from 'react-markdown'
@@ -40,28 +48,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 
-interface Position {
-    id: string
-    company_name: string
-    position_title: string
-    job_description: string
-    job_url?: string
-    location?: string
-    salary_range?: string
-    match_score: number
-    matching_skills: string[]
-    missing_skills: string[]
-    recommendations: string[]
-    experience_alignment?: JobMatchResult['experienceAlignment']
-    responsibility_alignment?: JobMatchResult['responsibilityAlignment']
-    employment_type?: string
-    seniority_level?: string
-    status: string
-    applied_date?: string
-    notes?: string
-    created_at: string
-    cv_metadata_id?: string // The CV used to generate this position's match analysis
-}
+
 
 // CV Metadata interface for the dropdown
 interface CVMetadata {
@@ -95,14 +82,14 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     const [isReanalyzing, setIsReanalyzing] = useState(false)
 
     // Fetch CV list for re-analyze dropdown and tailored CV generation
-    const { data: cvResponse } = useFetch<CVMetadataResponse>('/api/cv-metadata', { skip: authLoading })
+    const { data: cvResponse } = useCVMetadataList({ skip: authLoading })
     const cvList = cvResponse?.metadata || []
     // Filter to only show uploaded CVs (not tailored ones)
     const uploadedCvList = cvList.filter(cv => !(cv as any).source_type || (cv as any).source_type === 'uploaded')
 
     // Fetch position - skip while auth is loading (redirect will happen if not authenticated)
-    const { data: position, isLoading: positionLoading, error: fetchError, refetch } = useFetch<Position>(
-        `/api/job-positions/${id}`,
+    const { data: position, isLoading: positionLoading, error: fetchError, refetch } = usePosition(
+        id,
         {
             skip: authLoading,
             onSuccess: (data) => setNotes(data.notes || '')
@@ -110,26 +97,22 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
     )
 
     // Mutation hooks for status and notes updates
-    const { mutate: updateStatus, isLoading: isUpdating } = useMutation<{ status: string }, Position>(
-        `/api/job-positions/${id}`,
-        'PATCH'
+    const { mutate: updateStatus, isLoading: isUpdating } = useAsyncAction(
+        async (payload: { status: string }) => updateJobPosition(id, payload)
     )
 
-    const { mutate: updateNotes, isLoading: isUpdatingNotes } = useMutation<{ notes: string }, Position>(
-        `/api/job-positions/${id}`,
-        'PATCH'
+    const { mutate: updateNotes, isLoading: isUpdatingNotes } = useAsyncAction(
+        async (payload: { notes: string }) => updateJobPosition(id, payload)
     )
 
     // Mutation for delete
-    const { mutate: deletePosition, isLoading: isDeleting } = useMutation<{}, void>(
-        `/api/job-positions/${id}`,
-        'DELETE' as any
+    const { mutate: deletePositionAction, isLoading: isDeleting } = useAsyncAction(
+        async () => deleteJobPosition(id)
     )
 
     // Mutation for generating tailored CV
-    const { mutate: tailorCV, isLoading: isTailoring } = useMutation<any, { tailoredCV: string; cvMetadata?: any }>(
-        '/api/tailor-cv',
-        'POST'
+    const { mutate: tailorCVAction, isLoading: isTailoring } = useAsyncAction(
+        tailorCV
     )
 
     const handleStatusChange = useCallback(async (newStatus: string) => {
@@ -161,7 +144,7 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
 
     const handleDeleteConfirm = async () => {
         try {
-            await deletePosition({})
+            await deletePositionAction(undefined)
             router.push('/positions')
         } catch (error) {
             console.error('Error deleting position:', error)
@@ -183,39 +166,21 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
             setIsReanalyzing(true)
 
             // Call job match API with the new CV to get updated analysis
-            const response = await fetch('/api/evaluate-job-match', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    cvMetadataId: selectedNewCvId,
-                    jobDescription: position.job_description
-                })
+            const matchResult = await evaluateJobMatch({
+                cvMetadataId: selectedNewCvId,
+                jobDescription: position.job_description
             })
-
-            if (!response.ok) {
-                throw new Error('Failed to re-analyze job match')
-            }
-
-            const matchResult = await response.json()
 
             // Update the position with new analysis results and new CV reference
-            const updateResponse = await fetch(`/api/job-positions/${id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    cv_metadata_id: selectedNewCvId,
-                    match_score: matchResult.matchScore,
-                    matching_skills: matchResult.matchingSkills,
-                    missing_skills: matchResult.missingSkills,
-                    recommendations: matchResult.recommendations,
-                    experience_alignment: matchResult.experienceAlignment,
-                    responsibility_alignment: matchResult.responsibilityAlignment
-                })
+            await updateJobPosition(id, {
+                cv_metadata_id: selectedNewCvId,
+                match_score: matchResult.matchScore,
+                matching_skills: matchResult.matchingSkills,
+                missing_skills: matchResult.missingSkills,
+                recommendations: matchResult.recommendations,
+                experience_alignment: matchResult.experienceAlignment,
+                responsibility_alignment: matchResult.responsibilityAlignment
             })
-
-            if (!updateResponse.ok) {
-                throw new Error('Failed to update position with new analysis')
-            }
 
             await refetch()
             setIsReanalyzeDialogOpen(false)
@@ -237,7 +202,7 @@ export default function PositionDetailsPage({ params }: { params: Promise<{ id: 
             setIsGenerating(true)
 
             // Generate tailored CV - it will be saved automatically to cv_metadata
-            await tailorCV({
+            await tailorCVAction({
                 cvMetadataId,
                 jobDescription: position.job_description,
                 jobPositionId: position.id,

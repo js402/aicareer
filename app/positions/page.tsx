@@ -8,7 +8,9 @@ import { useAuthGuard } from "@/hooks/useAuthGuard"
 import { PositionCard } from "@/components/positions/position-card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useFetch } from "@/hooks/useFetch"
+import { useCVMetadataList } from "@/hooks/useCVMetadata" // Not needed here but good to clean imports if I touch them.
+import { usePositionsList } from "@/hooks/usePosition"
+import { usePositionActions } from "@/hooks/usePositionActions"
 import { useDebounce } from "@/hooks/useDebounce"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { EmptyState } from "@/components/ui/empty-state"
@@ -46,13 +48,12 @@ export default function PositionsPage() {
     const [deleteId, setDeleteId] = useState<string | null>(null)
     const [isDeleting, setIsDeleting] = useState(false)
     const debouncedSearch = useDebounce(searchQuery, 300)
-    
-    const { data: response, isLoading, refetch } = useFetch<PositionsResponse>(
-        '/api/job-positions'
-    )
+
+    const { data: response, isLoading, refetch } = usePositionsList()
+    const { deletePosition } = usePositionActions()
 
     const positions = response?.positions || []
-    
+
     const positionToDelete = positions.find(p => p.id === deleteId)
 
     const handleDeleteClick = (id: string) => {
@@ -61,18 +62,11 @@ export default function PositionsPage() {
 
     const handleDeleteConfirm = async () => {
         if (!deleteId) return
-        
+
         setIsDeleting(true)
         try {
-            const response = await fetch(`/api/job-positions/${deleteId}`, {
-                method: 'DELETE'
-            })
-            
-            if (response.ok) {
-                await refetch()
-            } else {
-                console.error('Failed to delete position')
-            }
+            await deletePosition(deleteId)
+            await refetch()
         } catch (error) {
             console.error('Error deleting position:', error)
         } finally {
@@ -146,9 +140,9 @@ export default function PositionsPage() {
                 ) : filteredPositions.length > 0 ? (
                     <div className="grid md:grid-cols-2 gap-6">
                         {filteredPositions.map(position => (
-                            <PositionCard 
-                                key={position.id} 
-                                position={position} 
+                            <PositionCard
+                                key={position.id}
+                                position={position}
                                 onDelete={handleDeleteClick}
                             />
                         ))}
@@ -179,7 +173,7 @@ export default function PositionsPage() {
                         <AlertDialogHeader>
                             <AlertDialogTitle>Delete Job Position</AlertDialogTitle>
                             <AlertDialogDescription>
-                                Are you sure you want to delete the position &quot;{positionToDelete?.position_title}&quot; at {positionToDelete?.company_name}? 
+                                Are you sure you want to delete the position &quot;{positionToDelete?.position_title}&quot; at {positionToDelete?.company_name}?
                                 This will permanently delete the job position and all associated tailored CVs. This action cannot be undone.
                             </AlertDialogDescription>
                         </AlertDialogHeader>

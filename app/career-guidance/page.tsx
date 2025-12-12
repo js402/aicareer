@@ -8,7 +8,7 @@ import { Navbar } from "@/components/navbar"
 import { ArrowLeft, Target, TrendingUp, Map, Download, Loader2, Sparkles, Briefcase, Edit } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCVStore } from "@/hooks/useCVStore"
-import { useMutation } from "@/hooks/useFetch"
+import { useAsyncAction } from "@/hooks/useFetch"
 import { PageLoader } from "@/components/ui/loading-spinner"
 import { StatusAlert } from "@/components/ui/status-alert"
 import { useLoadingState } from "@/hooks/useLoadingState"
@@ -18,16 +18,17 @@ import { MarketValueTab } from "@/components/career-guidance/market-value-tab"
 import { SkillGapTab } from "@/components/career-guidance/skill-gap-tab"
 import { CareerRolesTab, type CareerPathSuggestions } from "@/components/career-guidance/career-roles-tab"
 import { CVEditorModal } from "@/components/cv-editor"
-import type { ExtractedCVInfo } from "@/lib/api-client"
+import { ExtractedCVInfo, generateCareerGuidance, generateCareerPathSuggestions, updateCVMetadata } from "@/lib/api-client"
+
 // Define specific types matching the API response
-interface StrategicPath {
+export interface StrategicPath {
     currentPosition: string
     shortTerm: string[]
     midTerm: string[]
     longTerm: string[]
 }
 
-interface MarketValue {
+export interface MarketValue {
     salaryRange: {
         min: number
         max: number
@@ -75,16 +76,15 @@ export default function CareerGuidancePage() {
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
     const [isEditorOpen, setIsEditorOpen] = useState(false)
 
-    const { mutate: postGuidance } = useMutation<{ cvContent?: string; extractedInfo?: ExtractedCVInfo }, { guidance: any }>(
-        '/api/career-guidance',
-        'POST',
+    const { mutate: postGuidance, isLoading: isGeneratingGuidance } = useAsyncAction(
+        generateCareerGuidance,
         {
             onSuccess: (data) => setGuidance(data.guidance),
             onError: (err) => loadingState.setError(err.message)
         }
     )
 
-    const generateGuidance = useCallback(async (content?: string, info?: ExtractedCVInfo) => {
+    const runGenerateGuidance = useCallback(async (content?: string, info?: ExtractedCVInfo) => {
         if (!content && !info) return
         await loadingState.execute(
             async () => {
@@ -96,18 +96,17 @@ export default function CareerGuidancePage() {
         )
     }, [postGuidance, loadingState])
 
-    const { mutate: postSuggestions } = useMutation<{ cvContent?: string; extractedInfo?: ExtractedCVInfo }, { suggestions: any }>(
-        '/api/career-path-suggestions',
-        'POST',
+    const { mutate: postSuggestions, isLoading: isGeneratingSuggestions } = useAsyncAction(
+        generateCareerPathSuggestions,
         {
             onSuccess: (data) => setSuggestions(data.suggestions),
             onError: (err) => console.error('Error generating suggestions:', err)
         }
     )
 
-    const generateSuggestions = useCallback(async (content?: string, info?: ExtractedCVInfo) => {
+    const runGenerateSuggestions = useCallback(async (content?: string, info?: ExtractedCVInfo) => {
         if (!content && !info) return
-        setIsLoadingSuggestions(true)
+        setIsLoadingSuggestions(true) // Keep local state for now if preferred or use hook's isLoading
         try {
             await postSuggestions({ cvContent: content, extractedInfo: info })
         } finally {
@@ -121,12 +120,12 @@ export default function CareerGuidancePage() {
 
         // Auto-generate guidance if user has pro access and we don't have it yet
         if (!guidance && !loadingState.isLoading && !loadingState.error) {
-            generateGuidance(cvContent || undefined, extractedInfo || undefined)
+            runGenerateGuidance(cvContent || undefined, extractedInfo || undefined)
         }
         if (!suggestions && !isLoadingSuggestions) {
-            generateSuggestions(cvContent || undefined, extractedInfo || undefined)
+            runGenerateSuggestions(cvContent || undefined, extractedInfo || undefined)
         }
-    }, [isAuthenticated, guidance, suggestions, cvContent, extractedInfo, generateGuidance, generateSuggestions, loadingState.isLoading, loadingState.error, isLoadingSuggestions])
+    }, [isAuthenticated, guidance, suggestions, cvContent, extractedInfo, runGenerateGuidance, runGenerateSuggestions, loadingState.isLoading, loadingState.error, isLoadingSuggestions])
 
     const handleSaveCVEdits = async (updatedInfo: ExtractedCVInfo) => {
         // Update local state
@@ -135,11 +134,7 @@ export default function CareerGuidancePage() {
         // If we have a metadataId, save to the database
         if (metadataId) {
             try {
-                const response = await fetch(`/api/cv-metadata/${metadataId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ extractedInfo: updatedInfo })
-                })
+                await updateCVMetadata(metadataId, updatedInfo)
 
                 // If we updated the CV, we might want to re-generate guidance if it's based on old data
                 // But let's leave that to the user to clear or re-request for now
