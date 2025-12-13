@@ -4,49 +4,35 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { hasProAccess } from '@/lib/subscription'
 import { rateLimit } from '@/middleware/rateLimit'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
-import { formatExtractedInfoForAnalysis } from '@/lib/cv-service'
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 })
 
-const SUGGESTIONS_PROMPT = `You are an expert career strategist. Analyze the user's CV and suggest 3 distinct career paths/roles they should look out for.
+const SUGGESTIONS_MODEL = 'gpt-4o-mini'
 
-The 3 paths should be categorized as:
-1. "Comfort Zone": A role that perfectly matches their current skills and seniority. Low risk, high stability. Ideally a lateral move or slight optimization.
-2. "Growth": The logical next step in their career. Moderate challenge, focuses on professional development and seniority increase.
-3. "Challenging": A stretch goal or high-growth opportunity. Could be a pivot to a new domain, a significant jump in seniority, or a role in a very demanding environment.
+const SUGGESTIONS_PROMPT = `You are an expert career strategist for elite tech talent. 
+INPUT DATA: You will receive the candidate's FULL structured profile (JSON).
+
+YOUR MISSION: Suggest 3 distinct career paths based on their specific "Power Signals" (e.g., Founder experience, Niche Compliance skills, High-Scale metrics).
+
+CATEGORIES:
+1. "Comfort Zone": A role that perfectly matches their current tech stack and seniority. Low risk, high stability.
+2. "Growth": The logical next step (e.g., Senior -> Staff, or Dev -> Architect). Focuses on increasing scope/influence.
+3. "Challenging" (The Pivot): A high-reward stretch goal. Look for "Hidden Gems" in their history (e.g., "Founder" experience implies they could be a "Product Manager" or "Head of Engineering").
 
 For EACH path, provide:
 - Role Title
 - Vertical/Industry (e.g. Fintech, HealthTech, Enterprise SaaS)
-- Ideal Company Size (e.g. Early-stage Startup, Scale-up, Enterprise)
+- Ideal Company Size
 - Ideal Team Size
-- Brief Description (Why this is a good fit and what to expect)
+- Brief Description (Connect specific CV details to why this fits)
 
 Return a valid JSON object with this exact structure:
 {
-  "comfort": {
-    "role": string,
-    "vertical": string,
-    "companySize": string,
-    "teamSize": string,
-    "description": string
-  },
-  "growth": {
-    "role": string,
-    "vertical": string,
-    "companySize": string,
-    "teamSize": string,
-    "description": string
-  },
-  "challenging": {
-    "role": string,
-    "vertical": string,
-    "companySize": string,
-    "teamSize": string,
-    "description": string
-  }
+  "comfort": { "role": string, "vertical": string, "companySize": string, "teamSize": string, "description": string },
+  "growth": { "role": string, "vertical": string, "companySize": string, "teamSize": string, "description": string },
+  "challenging": { "role": string, "vertical": string, "companySize": string, "teamSize": string, "description": string }
 }
 `
 
@@ -54,50 +40,42 @@ export async function POST(req: NextRequest) {
     try {
         const ip = req.headers.get('x-forwarded-for') || 'unknown'
         if (!(await rateLimit(ip, 5, 60 * 1000))) {
-            return NextResponse.json(
-                { error: 'Too many requests. Please try again later.' },
-                { status: 429 }
-            )
+            return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
         }
 
         const supabase = await createServerSupabaseClient()
         const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-        if (authError || !user) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
+        if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         const hasPro = await hasProAccess(supabase, user.id)
-        if (!hasPro) {
-            return NextResponse.json(
-                { error: 'Pro subscription required' },
-                { status: 403 }
-            )
-        }
+        if (!hasPro) return NextResponse.json({ error: 'Pro subscription required' }, { status: 403 })
 
         const body = await req.json()
-        const { cvContent, extractedInfo } = body
+        const { extractedInfo } = body // STRICT: Only accept extractedInfo
 
-        let contextContent: string
-
-        if (cvContent) {
-            contextContent = cvContent
-        } else if (extractedInfo) {
-            contextContent = formatExtractedInfoForAnalysis(extractedInfo)
-        } else {
-            return NextResponse.json({ error: 'CV content or extracted info required' }, { status: 400 })
+        // --- STRICT DATA CHECK ---
+        // We reject raw text. Strategies MUST be built on the "Mega CV" Blueprint.
+        if (!extractedInfo) {
+            return NextResponse.json(
+                { error: 'Structured CV data (extractedInfo) is required. Please parse the CV first.' }, 
+                { status: 400 }
+            )
         }
 
         const messages: ChatCompletionMessageParam[] = [
             { role: 'system', content: SUGGESTIONS_PROMPT },
             {
                 role: 'user',
-                content: `Based on this CV, provide the career path suggestions:\n\n${contextContent.substring(0, 15000)}` // Truncate to avoid token limits if CV is huge
+                // Direct Injection of the Blueprint JSON
+                content: `Based on this CV, provide 3 strategic career path suggestions:
+
+${JSON.stringify(extractedInfo, null, 2)}` 
             }
         ]
 
         const completion = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
+            model: SUGGESTIONS_MODEL,
             messages,
             response_format: { type: 'json_object' },
             temperature: 0.7,
@@ -113,9 +91,6 @@ export async function POST(req: NextRequest) {
 
     } catch (error) {
         console.error('Error generating career suggestions:', error)
-        return NextResponse.json(
-            { error: 'Failed to generate suggestions' },
-            { status: 500 }
-        )
+        return NextResponse.json({ error: 'Failed to generate suggestions' }, { status: 500 })
     }
 }
