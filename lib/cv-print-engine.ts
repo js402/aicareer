@@ -48,25 +48,25 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   template: 'modern',
   paperSize: 'A4',
   margins: {
-    top: 20,
-    right: 20,
-    bottom: 20,
-    left: 20
+    top: 15,
+    right: 15,
+    bottom: 15,
+    left: 15
   },
   fontSize: {
-    base: 11,
-    h1: 20,
-    h2: 14,
-    h3: 12
+    base: 10,  // Reduced from 11
+    h1: 18,    // Reduced from 20
+    h2: 13,    // Reduced from 14
+    h3: 11
   },
   lineHeight: {
     body: 1.4,
     headings: 1.2
   },
   spacing: {
-    sectionGap: 18,
-    paragraphGap: 8,
-    listItemGap: 4
+    sectionGap: 14, // Reduced from 18
+    paragraphGap: 6, // Reduced from 8
+    listItemGap: 2  // Reduced from 4
   },
   colors: {
     primary: '#1a1a1a',

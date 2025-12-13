@@ -255,7 +255,7 @@ function generateHeader(cvData: ExtractedCVInfo, template: CVTemplate): string {
   const contact = typeof cvData.contactInfo === 'object' ? cvData.contactInfo :
     { raw: cvData.contactInfo || '' }
 
-  const sanitize = (str?: string) => (!str || str.toLowerCase() === 'not provided') ? '' : str
+  const sanitize = (str?: string) => (!str || str.trim().toLowerCase() === 'not provided') ? '' : str.trim()
 
   const contactParts = []
   const email = sanitize(contact.email)
@@ -293,7 +293,6 @@ function generateSummarySection(summary: string): string {
   return `
 <section class="cv-section">
   <h2 class="cv-section-title">Professional Summary</h2>
-  <p class="cv-summary">${summary}</p>
   <p class="cv-summary">${summary}</p>
 </section>`
 }
@@ -339,7 +338,7 @@ function generateExperienceSection(experience: any[]): string {
 
 function generateEducationSection(education: any[]): string {
   const items = education.map(edu => {
-    const sanitize = (str?: string) => (!str || str.toLowerCase() === 'not provided') ? '' : str
+    const sanitize = (str?: string) => (!str || str.trim().toLowerCase() === 'not provided') ? '' : str.trim()
 
     const degree = sanitize(edu.degree || edu.qualification) || 'Degree'
     const institution = sanitize(edu.institution || edu.school) || 'Institution'

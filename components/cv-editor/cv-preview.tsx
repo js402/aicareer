@@ -33,27 +33,16 @@ export default function CVPreview({
     return `
       ${baseCSS}
       
-      /* Preview-specific styles */
-      .cv-container {
-        max-width: none;
-        margin: 0;
-        padding: ${settings?.margins?.top || 20}mm ${settings?.margins?.right || 20}mm ${settings?.margins?.bottom || 20}mm ${settings?.margins?.left || 20}mm;
-        background: white;
-        min-height: 100vh;
-      }
-      
-      /* Paper size simulation */
+      /* Preview-specific styles - ONLY for screen */
       @media screen {
-        body {
-          margin: 0;
-          padding: 20px;
-          background: #f5f5f5;
-        }
-        
         .cv-container {
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-          margin: 0 auto;
+          max-width: none;
+          margin: 0;
+          padding: ${settings?.margins?.top || 20}mm ${settings?.margins?.right || 20}mm ${settings?.margins?.bottom || 20}mm ${settings?.margins?.left || 20}mm;
           background: white;
+          min-height: 100vh;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+          
           ${PAPER_SIZES[paperSize] ? `
             width: ${PAPER_SIZES[paperSize].width};
             min-height: ${PAPER_SIZES[paperSize].height};
@@ -61,6 +50,12 @@ export default function CVPreview({
             background-image: linear-gradient(to bottom, transparent calc(${PAPER_SIZES[paperSize].height} - 1px), #dedede calc(${PAPER_SIZES[paperSize].height} - 1px), #dedede ${PAPER_SIZES[paperSize].height});
             background-size: 100% ${PAPER_SIZES[paperSize].height};
           ` : ''}
+        }
+
+        body {
+          margin: 0;
+          padding: 20px;
+          background: #f5f5f5;
         }
       }
       
