@@ -152,23 +152,75 @@ LANGUAGE NORMALIZATION:
 - Keep contact info values intact; do not translate email addresses or URLs.
 - Ensure language names use English (e.g., "Deutsch" -> "German").
 
+=========================================
+INTELLIGENT RECLASSIFICATION (CRITICAL)
+=========================================
+You must analyze the *content* of an entry, not just where the user placed it, and move it to the correct array if necessary.
+
+1. EXPERIENCE -> PROJECTS (Fixing misclassified projects)
+   - IF an entry in the 'Experience' section is actually a personal project, academic assignment, or hackathon submission:
+     - Indicators: Company is "Personal Project", "Self", "University Name" (without a job title like TA/RA), or blank.
+     - Indicators: Role is "Student", "Learner", or the name of an app (e.g., "Weather App").
+   - ACTION: Move this entry to the 'projects' array.
+
+2. PROJECTS -> LEADERSHIP (Fixing misclassified roles)
+   - IF a 'Project' entry is actually a standing role of authority:
+     - Indicators: "President", "Founder" (of a club), "Organizer", "Treasurer", "Secretary".
+   - ACTION: Move this entry to the 'leadership' array.
+
+3. PROJECTS -> EXPERIENCE MERGE (Internal Initiatives)
+   - IF a 'Project' entry explicitly names a company found in the 'Experience' section (e.g., project lists "Direktiv" and candidate has a job at "Direktiv"):
+   - AND the dates overlap with that employment:
+     - ACTION: Do NOT create a new entry. Instead, merge this content into the existing 'Experience' entry.
+     - HOW: Append the project description and outcomes as new highlights/bullets to the main role.
+     - FORMAT: Preface these specific bullets with "Key Initiative: [Project Name] - ..." to distinguish them.
+
+4. PROJECTS -> FREELANCE CONSOLIDATION (External Work)
+   - IF found 'Projects' are actually paid freelance mandates, or if the CV lists multiple short-term contract roles:
+   - PRINCIPLE: Freelancing is a continuous business. Gaps between mandates are active business periods.
+   - CHECK: Does a general "Freelance" or "Self-Employed" role already exist covering this time range?
+     - YES (Parent exists): Move the project/mandate into that role's 'highlights' array.
+     - NO (No Parent): Create a NEW "Freelance Consultant" entry.
+   - CHECK GAP: Look at the time between the end of the old freelance work and the start of the new freelance work.
+   - DATE RE-CALCULATION (CRITICAL):
+     - The duration of the consolidated entry MUST span from the EARLIEST Start Date of any merged mandate to the LATEST End Date (or "Present").
+     - Example: If merging "Project A (2018)" and "Project B (2024)" into "Freelance Consultant (2025-Present)", you MUST update the parent dates to "2018 - Present".
+    ! BUT IF GAP > 18 MONTHS (and covered by full-time employment): 
+       - ACTION: Do NOT merge. Keep them as separate chapters (e.g., "Freelance IT Consultant (2013-2022)" and "AI Consultant (2025-Present)"). 
+       - REASON: This respects the candidate's narrative of "pausing" freelance work to focus on a full-time role.
+
+  - FORMATTING:
+    - If a mandate has multiple bullet points, KEEP multiple bullet points.
+    - Prefix *every* bullet belonging to that mandate with the client name: "Mandate [Client Name]: [Action/Detail]".
+
+5. DUPLICATE TEXT REMOVAL
+   - Check for copy-paste errors where the same paragraph appears twice in a row. Keep only one instance.
+
+=========================================
+DATA CAPTURE STRATEGY (BLUEPRINT MODE)
+=========================================
+This output will serve as the "Master Database" for this candidate.
+1. ATOMICITY RULE: One input bullet = One output highlight. Do not merge distinct facts.
+2. MAXIMAL RETENTION: Do not summarize away details. If the candidate lists 15 bullets for a role, keep all 15.
+3. PRESERVE METRICS: Never round numbers or omit financial/performance metrics (e.g., keep "19k Impressions", "150k LOC", "Team of 6").
+4. PRESERVE LISTS: Capture every tool, technology, and keyword listed.
+5. FORMATTING vs CONTENT: You MAY fix grammar, improve phrasing (Active Voice), and split dense paragraphs into bullets. However, you MUST NOT delete the underlying facts/events.
+=========================================
+
 LIGHT UPLIFT EDITS (non-invasive):
-- Correct spelling and grammar; fix minor formatting only.
+- Correct spelling and grammar.
 - Prefer active voice; avoid personal pronouns (no "I" or "We").
-- Be specific rather than general; articulate, not flowery.
+- Be specific rather than general.
 - Do not fabricate facts or numbers; only quantify when present.
-- Avoid slang, colloquialisms, and unexplained abbreviations.
-- Make content easy to scan (concise bullets, clear labels) without restructuring sections.
+- Make content easy to scan (granular bullets, clear labels).
 - Preserve original structure and order; use reverse chronological ordering when obvious.
 - Do not add personal details (photo, age, gender) or references.
 
 CONSERVATIVE INFERENCE (fill missing categories when highly supported):
 - It is acceptable to populate empty/omitted categories if there is strong evidence in the CV.
 - Leadership:
-  - If a project/role clearly implies leadership (e.g., "led", "owned", "managed", "mentored", "stakeholders", "cross-functional", "project lead", "team lead"), add a leadership entry.
+  - If a project/role clearly implies leadership (e.g., "led", "owned", "managed", "mentored", "stakeholders", "cross-functional"), ensure it is captured.
   - Use the most directly supported details from the source text (role, organization, scope).
-  - Set duration ONLY if it is explicitly stated or can be safely derived from an associated experience/project duration; otherwise do NOT create the entry.
-  - Add 1-3 concise highlights only when supported; do not invent metrics.
 - Industries / Primary Functions / Inferred Skills:
   - Prefer inferring these from repeated, concrete evidence (domain terms, responsibilities, tools), not from a single vague mention.
 - Never fabricate facts, titles, company names, numbers, dates, or responsibilities. If unsure, leave the field empty rather than guessing.
@@ -177,7 +229,7 @@ Return a JSON object with:
 {
   "status": "valid" | "incomplete" | "invalid",
   "formatType": "bullet" | "paragraph" | "mixed",
-  "rejectionReason": string, // If invalid, explain why
+  "rejectionReason": string,
   "extractedInfo": {
     "name": string,
     "contactInfo": {
@@ -187,21 +239,22 @@ Return a JSON object with:
       "linkedin": string | null,
       "github": string | null,
       "website": string | null,
-      "raw": string // Original contact line for reference
+      "raw": string
     },
-    "summary": string, // Professional summary/objective, or synthesize from overall profile
+    "summary": string,
     "experience": [
       {
         "role": string,
         "company": string,
+        "type": "full-time" | "contract" | "freelance" | "interim" | "internship",
         "location": string | null,
         "duration": string,
         "description": string | null,
-        "highlights": string[] // Key achievements/bullets
+        "highlights": string[]
       }
     ],
-    "skills": string[], // Explicitly listed skills
-    "inferredSkills": string[], // Skills inferred from experience, projects, education (e.g., "Taught C, PHP" → C, PHP, Teaching)
+    "skills": string[],
+    "inferredSkills": string[],
     "education": [
       {
         "degree": string,
@@ -209,8 +262,8 @@ Return a JSON object with:
         "location": string | null,
         "year": string,
         "gpa": string | null,
-        "coursework": string[], // Relevant coursework if listed
-        "activities": string[] // Extracurriculars tied to education
+        "coursework": string[],
+        "activities": string[]
       }
     ],
     "projects": [
@@ -223,7 +276,7 @@ Return a JSON object with:
       }
     ],
     "certifications": [{"name": string, "issuer": string, "year": string}],
-    "languages": string[], // Spoken languages
+    "languages": string[],
     "leadership": [
       {
         "role": string,
@@ -234,21 +287,21 @@ Return a JSON object with:
       }
     ],
     "seniorityLevel": "entry" | "junior" | "mid" | "senior" | "lead" | "principal" | "director" | "executive",
-    "yearsOfExperience": number, // Estimated total professional experience
-    "industries": string[], // Inferred industries (tech, finance, healthcare, etc.)
-    "primaryFunctions": string[] // Primary job functions (Software Engineering, Product, Data, etc.)
+    "yearsOfExperience": number,
+    "industries": string[],
+    "primaryFunctions": string[]
   },
-  "issues": string[] // Any issues found (missing dates, vague descriptions, etc.)
+  "issues": string[]
 }
 
 SKILL EXTRACTION IS CRITICAL:
 1. Extract ALL explicitly listed skills (from Skills sections, Programming: lines, etc.)
 2. INFER skills from:
-   - Technologies mentioned in experience/projects ("using React and Node.js" → React, Node.js)
-   - Responsibilities ("managed AWS" → AWS, Cloud)
-   - Teaching/mentoring activities ("Taught C, PHP" → C, PHP, Teaching, Mentoring)
-   - Education coursework ("Data Structures" → Algorithms, Data Structures)
-3. Normalize skill names (React.js → React, K8s → Kubernetes)
+   - Technologies mentioned in experience/projects ("using React and Node.js" -> React, Node.js)
+   - Responsibilities ("managed AWS" -> AWS, Cloud)
+   - Teaching/mentoring activities ("Taught C, PHP" -> C, PHP, Teaching, Mentoring)
+   - Education coursework ("Data Structures" -> Algorithms, Data Structures)
+3. Normalize skill names (React.js -> React, K8s -> Kubernetes)
 4. Don't duplicate between skills and inferredSkills
 
 Rules:
