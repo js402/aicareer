@@ -11,7 +11,7 @@ export interface CVTemplate {
   category: 'modern' | 'classic' | 'executive' | 'creative' | 'minimal' | 'academic'
   preview?: string // Base64 thumbnail
   printOptimized: boolean
-  
+
   layout: {
     columns: 1 | 2
     headerStyle: 'center' | 'left' | 'split'
@@ -19,7 +19,7 @@ export interface CVTemplate {
     sectionOrder: string[]
     spacing: 'compact' | 'normal' | 'spacious'
   }
-  
+
   styles: PrintSettings
 }
 
@@ -27,7 +27,7 @@ export interface CVTemplate {
 export const PRINT_COLOR_PALETTES = {
   classic: {
     primary: '#1a1a1a',
-    accent: '#2563eb', 
+    accent: '#2563eb',
     text: '#374151',
     muted: '#6b7280'
   },
@@ -82,7 +82,7 @@ export const CV_TEMPLATES: Record<string, CVTemplate> = {
       }
     }
   },
-  
+
   classic: {
     id: 'classic',
     name: 'Classic Traditional',
@@ -112,7 +112,7 @@ export const CV_TEMPLATES: Record<string, CVTemplate> = {
       }
     }
   },
-  
+
   executive: {
     id: 'executive',
     name: 'Executive Leadership',
@@ -142,7 +142,7 @@ export const CV_TEMPLATES: Record<string, CVTemplate> = {
       }
     }
   },
-  
+
   minimal: {
     id: 'minimal',
     name: 'Minimal Clean',
@@ -189,8 +189,8 @@ export function renderCVWithTemplate(
   customSettings?: Partial<PrintSettings>
 ): string {
   const template = CV_TEMPLATES[templateId] || CV_TEMPLATES.modern
-  const settings = customSettings ? 
-    { ...template.styles, ...customSettings } : 
+  const settings = customSettings ?
+    { ...template.styles, ...customSettings } :
     template.styles
 
   return generateCVHTML(cvData, template, settings)
@@ -205,15 +205,15 @@ function generateCVHTML(
   settings: PrintSettings
 ): string {
   const sections: string[] = []
-  
+
   // Header section
   sections.push(generateHeader(cvData, template))
-  
+
   // Summary section
   if (cvData.summary && template.layout.sectionOrder.includes('summary')) {
     sections.push(generateSummarySection(cvData.summary))
   }
-  
+
   // Dynamic sections based on template order
   template.layout.sectionOrder.forEach(sectionId => {
     switch (sectionId) {
@@ -244,7 +244,7 @@ function generateCVHTML(
         break
     }
   })
-  
+
   return `
 <div class="cv-container">
   ${sections.join('\n')}
@@ -252,54 +252,72 @@ function generateCVHTML(
 }
 
 function generateHeader(cvData: ExtractedCVInfo, template: CVTemplate): string {
-  const contact = typeof cvData.contactInfo === 'object' ? cvData.contactInfo : 
-                  { raw: cvData.contactInfo || '' }
-  
+  const contact = typeof cvData.contactInfo === 'object' ? cvData.contactInfo :
+    { raw: cvData.contactInfo || '' }
+
+  const sanitize = (str?: string) => (!str || str.toLowerCase() === 'not provided') ? '' : str
+
   const contactParts = []
-  if ('email' in contact && contact.email) contactParts.push(contact.email)
-  if ('phone' in contact && contact.phone) contactParts.push(contact.phone)
-  if ('location' in contact && contact.location) contactParts.push(contact.location)
-  if ('linkedin' in contact && contact.linkedin) contactParts.push(contact.linkedin)
-  if ('raw' in contact && contact.raw && contactParts.length === 0) {
-    contactParts.push(contact.raw)
+  const email = sanitize(contact.email)
+  const phone = sanitize(contact.phone)
+  const location = sanitize(contact.location)
+  const linkedin = sanitize(contact.linkedin)
+  const raw = sanitize(contact.raw)
+
+  if (email) contactParts.push(email)
+  if (phone) contactParts.push(phone)
+  if (location) contactParts.push(location)
+  if (linkedin) contactParts.push(linkedin)
+  if (raw && contactParts.length === 0) {
+    contactParts.push(raw)
   }
-  
+
   const contactHTML = template.layout.contactStyle === 'stacked' ?
     contactParts.map(part => `<div>${part}</div>`).join('') :
     contactParts.join(' • ')
-  
-  const alignClass = template.layout.headerStyle === 'center' ? 'text-center' : 
-                    template.layout.headerStyle === 'split' ? 'text-right' : ''
-  
+
+  const alignClass = template.layout.headerStyle === 'center' ? 'text-center' :
+    template.layout.headerStyle === 'split' ? 'text-right' : ''
+
+  const name = sanitize(cvData.name) || 'My Name'
+
   return `
 <header class="cv-header ${alignClass}">
-  <h1 class="cv-name">${cvData.name || 'Professional Name'}</h1>
+  <h1 class="cv-name">${name}</h1>
   <div class="cv-contact cv-contact-group">${contactHTML}</div>
 </header>`
 }
 
 function generateSummarySection(summary: string): string {
+  if (!summary || summary.toLowerCase() === 'not provided') return ''
   return `
 <section class="cv-section">
   <h2 class="cv-section-title">Professional Summary</h2>
+  <p class="cv-summary">${summary}</p>
   <p class="cv-summary">${summary}</p>
 </section>`
 }
 
 function generateExperienceSection(experience: any[]): string {
   const items = experience.map(exp => {
-    const title = exp.role || exp.title || 'Position'
-    const company = exp.company || 'Company'
-    const duration = exp.duration || exp.dates || ''
-    const location = exp.location || ''
-    
-    const highlights = exp.highlights || exp.responsibilities || exp.bullets || []
-    const highlightsList = highlights.length > 0 ? 
-      `<ul class="cv-list">${highlights.map((h: string) => `<li class="cv-list-item">${h}</li>`).join('')}</ul>` : 
+    const sanitize = (str?: string) => (!str || str.toLowerCase() === 'not provided') ? '' : str
+
+    const title = sanitize(exp.role || exp.title) || 'Position'
+    const company = sanitize(exp.company) || 'Company'
+    const duration = sanitize(exp.duration || exp.dates) || ''
+    const location = sanitize(exp.location) || ''
+
+    // Filter highlights
+    const highlightsValue = exp.highlights || exp.responsibilities || exp.bullets || []
+    const highlights = highlightsValue.filter((h: string) => sanitize(h))
+
+    const highlightsList = highlights.length > 0 ?
+      `<ul class="cv-list">${highlights.map((h: string) => `<li class="cv-list-item">${h}</li>`).join('')}</ul>` :
       ''
-    
-    const description = exp.description ? `<p class="cv-paragraph">${exp.description}</p>` : ''
-    
+
+    const desc = sanitize(exp.description)
+    const description = desc ? `<p class="cv-paragraph">${desc}</p>` : ''
+
     return `
 <div class="cv-item">
   <div class="cv-item-header">
@@ -321,11 +339,13 @@ function generateExperienceSection(experience: any[]): string {
 
 function generateEducationSection(education: any[]): string {
   const items = education.map(edu => {
-    const degree = edu.degree || edu.qualification || 'Degree'
-    const institution = edu.institution || edu.school || 'Institution'
-    const year = edu.year || edu.graduationYear || ''
-    const location = edu.location || ''
-    
+    const sanitize = (str?: string) => (!str || str.toLowerCase() === 'not provided') ? '' : str
+
+    const degree = sanitize(edu.degree || edu.qualification) || 'Degree'
+    const institution = sanitize(edu.institution || edu.school) || 'Institution'
+    const year = sanitize(edu.year || edu.graduationYear) || ''
+    const location = sanitize(edu.location) || ''
+
     return `
 <div class="cv-item">
   <div class="cv-item-header">
@@ -345,7 +365,7 @@ function generateEducationSection(education: any[]): string {
 
 function generateSkillsSection(skills: string[], inferredSkills: string[]): string {
   const allSkills = [...new Set([...skills, ...inferredSkills])]
-  const skillTags = allSkills.map(skill => 
+  const skillTags = allSkills.map(skill =>
     `<span class="cv-skill-tag">${skill}</span>`
   ).join('')
 
@@ -362,10 +382,10 @@ function generateProjectsSection(projects: any[]): string {
     const description = project.description || ''
     const technologies = project.technologies || []
     const link = project.link || ''
-    
-    const techList = technologies.length > 0 ? 
+
+    const techList = technologies.length > 0 ?
       ` • Technologies: ${technologies.join(', ')}` : ''
-    
+
     return `
 <div class="cv-item">
   <div class="cv-item-header">
@@ -389,11 +409,11 @@ function generateLeadershipSection(leadership: any[]): string {
     const organization = item.organization || item.description || ''
     const duration = item.duration || ''
     const highlights = item.highlights || []
-    
-    const highlightsList = highlights.length > 0 ? 
-      `<ul class="cv-list">${highlights.map((h: string) => `<li class="cv-list-item">${h}</li>`).join('')}</ul>` : 
+
+    const highlightsList = highlights.length > 0 ?
+      `<ul class="cv-list">${highlights.map((h: string) => `<li class="cv-list-item">${h}</li>`).join('')}</ul>` :
       ''
-    
+
     return `
 <div class="cv-item">
   <div class="cv-item-header">

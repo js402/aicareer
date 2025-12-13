@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { 
+import {
   ArrowLeft,
   Wand2,
   FileText,
@@ -23,17 +23,19 @@ import type { ExtractedCVInfo } from '@/lib/api-client'
 import { useToast } from '@/hooks/use-toast'
 import { useAuthGuard } from '@/hooks/useAuthGuard'
 
+import { Navbar } from '@/components/navbar'
+
 function CVEditorPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const cvId = searchParams.get('id')
   const { toast } = useToast()
   const { isLoading: authLoading } = useAuthGuard()
-  
+
   const [cvData, setCvData] = useState<ExtractedCVInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
+
   const [selectedTemplate, setSelectedTemplate] = useState('modern')
   const [printSettings, setPrintSettings] = useState<PrintSettings>(
     CV_TEMPLATES.modern.styles
@@ -54,14 +56,14 @@ function CVEditorPageContent() {
           throw new Error('Failed to fetch CV data')
         }
         const data = await response.json()
-        
+
         // Parse extractedInfo if it's a string
-        const extractedInfo = typeof data.extractedInfo === 'string' 
+        const extractedInfo = typeof data.extractedInfo === 'string'
           ? JSON.parse(data.extractedInfo)
           : data.extractedInfo
-        
+
         setCvData(extractedInfo)
-        
+
         // Also try to fetch saved layout
         const layoutRes = await fetch(`/api/cv-layouts/${cvId}`)
         if (layoutRes.ok) {
@@ -93,7 +95,7 @@ function CVEditorPageContent() {
 
   const generatePreview = useCallback((templateId: string, settings: PrintSettings) => {
     if (!cvData) return
-    
+
     try {
       const html = renderCVWithTemplate(cvData, templateId, settings)
       const css = generatePrintCSS(settings)
@@ -116,7 +118,7 @@ function CVEditorPageContent() {
 
   const handleSave = async () => {
     if (!cvId) return
-    
+
     setIsSaving(true)
     try {
       const response = await fetch(`/api/cv-layouts/${cvId}`, {
@@ -152,7 +154,16 @@ function CVEditorPageContent() {
 
   const handleDownload = async () => {
     if (!cvId || !previewHTML) return
-    
+
+    // Open the server-generated print view in a new tab
+    // The server ensures the correct filename in the title/headers
+    // This allows the user to use the browser's native "Save as PDF" which is reliable
+    const printUrl = `/api/cv-pdf/${cvId}`
+
+    // We can POST the settings if we want to support unsaved changes, 
+    // but a GET/link is simpler if we save first or simple pass params URL encoded.
+    // However, the current API is POST. Let's create a form submit or use the POST approach.
+
     setIsDownloading(true)
     try {
       const response = await fetch(`/api/cv-pdf/${cvId}`, {
@@ -166,28 +177,34 @@ function CVEditorPageContent() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to generate PDF')
+        throw new Error('Failed to generate PDF view')
       }
 
       const blob = await response.blob()
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `cv-${cvData?.name?.replace(/\s+/g, '-').toLowerCase() || 'resume'}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
 
-      toast({
-        title: "PDF Downloaded",
-        description: "Your CV has been downloaded as PDF",
-      })
+      // Open in new tab for printing
+      const printWindow = window.open(url, '_blank')
+      if (printWindow) {
+        printWindow.onload = () => {
+          // The HTML itself has window.print() in onload
+        }
+      } else {
+        toast({
+          title: "Popup Blocked",
+          description: "Please allow popups to view the print version.",
+          variant: "destructive"
+        })
+      }
+
+      // Cleanup URL after a delay
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+
     } catch (error) {
       console.error('Download failed:', error)
       toast({
-        title: "Download Error",
-        description: "Failed to download PDF. Try using the Print button instead.",
+        title: "Error",
+        description: "Failed to open print view.",
         variant: "destructive"
       })
     } finally {
@@ -246,104 +263,73 @@ function CVEditorPageContent() {
   const currentTemplate = CV_TEMPLATES[selectedTemplate]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-10">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 transition-colors">
+      <Navbar />
+      {/* Sub-header for critical actions */}
+      <div className="bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 backdrop-blur-sm sticky top-14 z-10 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => router.push('/cv-metadata')}
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-              <div className="w-px h-6 bg-gray-200" />
               <div className="flex items-center gap-2">
-                <Wand2 className="w-5 h-5 text-blue-600" />
-                <h1 className="text-lg font-semibold">CV Layout Editor</h1>
+                <Wand2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Editor</h1>
               </div>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              <Badge variant="secondary" className="text-xs hidden sm:inline-flex">
+              <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
+              <Badge variant="secondary" className="text-xs font-normal">
                 {currentTemplate.name}
               </Badge>
-              <Badge 
-                variant={currentTemplate.printOptimized ? "default" : "secondary"} 
-                className="text-xs hidden sm:inline-flex"
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="h-8 text-xs"
               >
-                {currentTemplate.printOptimized ? 'Print Ready' : 'Standard'}
-              </Badge>
-              
-              <div className="flex items-center gap-2 ml-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4 mr-2" />
-                  )}
-                  {isSaving ? 'Saving...' : 'Save'}
-                </Button>
-                <Button
-                  onClick={handleDownload}
-                  size="sm"
-                  disabled={!previewHTML || isDownloading}
-                >
-                  {isDownloading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="w-4 h-4 mr-2" />
-                  )}
-                  PDF
-                </Button>
-              </div>
+                {isSaving ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5 mr-2" />
+                )}
+                {isSaving ? 'Saving' : 'Save'}
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
         {/* Info Banner */}
-        <Alert className="mb-6">
-          <FileText className="h-4 w-4" />
-          <AlertDescription>
-            Design your CV with professional templates optimized for print and ATS systems. 
+        <Alert className="bg-blue-50/50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900">
+          <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <AlertDescription className="text-blue-800 dark:text-blue-200">
+            Design your CV with professional templates optimized for print and ATS systems.
             Changes are reflected in real-time in the preview.
           </AlertDescription>
         </Alert>
 
-        {/* Editor Layout */}
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
-          {/* Layout Editor */}
-          <div className="xl:col-span-3 space-y-6">
-            <CVLayoutEditor
-              cvData={cvData}
-              onLayoutChange={handleLayoutChange}
-              onPreview={handlePreview}
-            />
-          </div>
+        {/* Layout Editor (Controls on Top) */}
+        <div className="w-full">
+          <CVLayoutEditor
+            cvData={cvData}
+            onLayoutChange={handleLayoutChange}
+            onPreview={handlePreview}
+          />
+        </div>
 
-          {/* Preview */}
-          <div className="xl:col-span-2">
-            <div className="sticky top-24">
-              <CVPreview
-                html={previewHTML}
-                css={previewCSS}
-                settings={printSettings}
-                onDownload={handleDownload}
-                className="h-[calc(100vh-8rem)]"
-              />
-            </div>
-          </div>
+        {/* Preview (Below) */}
+        <div className="w-full">
+          <CVPreview
+            html={previewHTML}
+            css={previewCSS}
+            settings={printSettings}
+            onDownload={handleDownload}
+            className="h-[800px] shadow-sm" // Fixed height for scrollable preview area
+          />
         </div>
       </div>
     </div>

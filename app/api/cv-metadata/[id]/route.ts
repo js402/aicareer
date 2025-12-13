@@ -2,6 +2,46 @@ import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/api-middleware'
 import { renderExtractedInfoToMarkdown } from '@/lib/cv-formatter'
 
+// GET /api/cv-metadata/[id] - Get CV metadata
+export const GET = withAuth(async (request, { supabase, user }) => {
+    try {
+        const id = request.nextUrl.pathname.split('/').pop() || ''
+
+        const { data, error } = await supabase
+            .from('cv_metadata')
+            .select('*')
+            .eq('id', id)
+            .single()
+
+        if (error || !data) {
+            return NextResponse.json(
+                { error: 'Metadata not found' },
+                { status: 404 }
+            )
+        }
+
+        if (data.user_id !== user.id) {
+            return NextResponse.json(
+                { error: 'Unauthorized' },
+                { status: 403 }
+            )
+        }
+
+        // Map snake_case to camelCase for frontend compatibility
+        return NextResponse.json({
+            ...data,
+            extractedInfo: data.extracted_info,
+            displayName: data.display_name
+        })
+    } catch (error) {
+        console.error('Error fetching CV metadata:', error)
+        return NextResponse.json(
+            { error: 'Failed to fetch CV metadata' },
+            { status: 500 }
+        )
+    }
+})
+
 // PUT /api/cv-metadata/[id] - Update CV metadata
 export const PUT = withAuth(async (request, { supabase, user }) => {
     try {

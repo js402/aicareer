@@ -86,7 +86,7 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
  */
 export function generatePrintCSS(settings: PrintSettings): string {
   const { margins, fontSize, lineHeight, spacing, colors, typography } = settings
-  
+
   return `
 /* === PRINT OPTIMIZATION === */
 @page {
@@ -158,8 +158,9 @@ export function generatePrintCSS(settings: PrintSettings): string {
 /* === SECTIONS === */
 .cv-section {
   margin-bottom: ${spacing.sectionGap}pt;
-  page-break-inside: avoid; /* Try to keep sections together */
-  break-inside: avoid-page;
+  /* Allow sections to break across pages */
+  page-break-inside: auto;
+  break-inside: auto;
 }
 
 .cv-section-title {
@@ -336,13 +337,13 @@ export function optimizeForPrint(htmlContent: string): string {
   // Add strategic page-break hints
   return htmlContent
     // Keep job titles with companies
-    .replace(/<h3([^>]*)>(.*?)<\/h3>\s*<p([^>]*)>(.*?)<\/p>/g, 
-             '<div class="cv-item-header"><h3$1>$2</h3><p$3>$4</p></div>')
-    
+    .replace(/<h3([^>]*)>(.*?)<\/h3>\s*<p([^>]*)>(.*?)<\/p>/g,
+      '<div class="cv-item-header"><h3$1>$2</h3><p$3>$4</p></div>')
+
     // Wrap experience entries to avoid orphans
-    .replace(/(<h3[^>]*>.*?<\/h3>[\s\S]*?(?=<h3|<h2|$))/g, 
-             '<div class="cv-item">$1</div>')
-    
+    .replace(/(<h3[^>]*>.*?<\/h3>[\s\S]*?(?=<h3|<h2|$))/g,
+      '<div class="cv-item">$1</div>')
+
     // Add classes for print optimization
     .replace(/<h1([^>]*)>/g, '<h1$1 class="cv-name">')
     .replace(/<h2([^>]*)>/g, '<h2$1 class="cv-section-title">')
@@ -363,7 +364,7 @@ export const PAPER_SIZES = {
   },
   Letter: {
     width: '8.5in',
-    height: '11in', 
+    height: '11in',
     name: 'US Letter (8.5 × 11 in)'
   }
 } as const
@@ -374,7 +375,7 @@ export const PAPER_SIZES = {
 export function generateFullPrintStylesheet(settings: PrintSettings): string {
   const css = generatePrintCSS(settings)
   const paperSize = PAPER_SIZES[settings.paperSize]
-  
+
   return `
 <!-- Print Optimized CV Stylesheet -->
 <style type="text/css" media="all">

@@ -23,7 +23,7 @@ export async function POST(
   try {
     const { id } = await params
     const supabase = await createServerSupabaseClient()
-    
+
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -31,17 +31,37 @@ export async function POST(
 
     const body = await request.json()
     const parsed = pdfRequestSchema.safeParse(body)
-    
+
     if (!parsed.success) {
-      return NextResponse.json({ 
-        error: 'Invalid request body', 
-        details: parsed.error.issues 
+      return NextResponse.json({
+        error: 'Invalid request body',
+        details: parsed.error.issues
       }, { status: 400 })
     }
 
     const { html, css, settings } = parsed.data
     const paperSize = settings?.paperSize || 'A4'
     const margins = settings?.margins || { top: 20, right: 20, bottom: 20, left: 20 }
+
+    // Fetch CV metadata for filename
+    const { data: cvMetadata } = await supabase
+      .from('cv_metadata')
+      .select('extracted_info, display_name')
+      .eq('id', id)
+      .single()
+
+    let filename = `cv-${id}`
+    if (cvMetadata) {
+      // extract name from jsonb or use display_name
+      const info = typeof cvMetadata.extracted_info === 'string'
+        ? JSON.parse(cvMetadata.extracted_info)
+        : cvMetadata.extracted_info
+
+      const candidateName = info?.name || cvMetadata.display_name
+      if (candidateName) {
+        filename = `cv-${candidateName.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`
+      }
+    }
 
     // Build full HTML document with print styles
     const fullHTML = `
@@ -100,13 +120,13 @@ export async function POST(
     return new NextResponse(fullHTML, {
       headers: {
         'Content-Type': 'text/html',
-        'Content-Disposition': `inline; filename="cv-${id}.html"`,
+        'Content-Disposition': `inline; filename="${filename}.html"`,
         'Cache-Control': 'no-cache'
       }
     })
   } catch (error) {
     console.error('Error in POST /api/cv-pdf/[id]:', error)
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Failed to generate PDF',
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 })

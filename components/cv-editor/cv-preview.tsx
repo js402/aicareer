@@ -15,12 +15,12 @@ interface CVPreviewProps {
   className?: string
 }
 
-export default function CVPreview({ 
-  html, 
-  css, 
-  settings, 
-  onDownload, 
-  className = '' 
+export default function CVPreview({
+  html,
+  css,
+  settings,
+  onDownload,
+  className = ''
 }: CVPreviewProps) {
   const [zoom, setZoom] = useState(0.75)
   const [paperSize, setPaperSize] = useState<keyof typeof PAPER_SIZES>('A4')
@@ -29,7 +29,7 @@ export default function CVPreview({
   // Generate complete CSS with print optimizations
   const completeCSS = React.useMemo(() => {
     const baseCSS = css || (settings ? generatePrintCSS(settings) : '')
-    
+
     return `
       ${baseCSS}
       
@@ -57,6 +57,9 @@ export default function CVPreview({
           ${PAPER_SIZES[paperSize] ? `
             width: ${PAPER_SIZES[paperSize].width};
             min-height: ${PAPER_SIZES[paperSize].height};
+            /* Visual page breaks */
+            background-image: linear-gradient(to bottom, transparent calc(${PAPER_SIZES[paperSize].height} - 1px), #dedede calc(${PAPER_SIZES[paperSize].height} - 1px), #dedede ${PAPER_SIZES[paperSize].height});
+            background-size: 100% ${PAPER_SIZES[paperSize].height};
           ` : ''}
         }
       }
@@ -73,9 +76,10 @@ export default function CVPreview({
     if (iframeRef.current && html) {
       const iframe = iframeRef.current
       const doc = iframe.contentDocument || iframe.contentWindow?.document
-      
+
       if (doc) {
         doc.open()
+        // DOCTYPE must be clean
         doc.write(`
           <!DOCTYPE html>
           <html lang="en">
@@ -115,78 +119,69 @@ export default function CVPreview({
   ]
 
   return (
-    <Card className={`h-full flex flex-col ${className}`}>
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="w-5 h-5" />
+    <div className={`flex flex-col h-full bg-slate-100/50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden ${className}`}>
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="flex items-center gap-3">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+            <Eye className="w-4 h-4" />
             Preview
-          </CardTitle>
-          <Badge variant="outline" className="text-xs">
-            Print Optimized
-          </Badge>
-        </div>
-        
-        {/* Preview Controls */}
-        <div className="flex items-center justify-between gap-4 pt-2">
-          <div className="flex items-center gap-2">
-            <Select value={zoom.toString()} onValueChange={(value) => setZoom(parseFloat(value))}>
-              <SelectTrigger className="w-20">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {zoomOptions.map(option => (
-                  <SelectItem key={option.value} value={option.value.toString()}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            <Select 
-              value={paperSize} 
-              onValueChange={(value: keyof typeof PAPER_SIZES) => setPaperSize(value)}
-            >
-              <SelectTrigger className="w-24">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.keys(PAPER_SIZES).map(size => (
-                  <SelectItem key={size} value={size}>
-                    {size}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handlePrint}>
-              <Printer className="w-4 h-4 mr-2" />
-              Print
-            </Button>
-            <Button variant="default" size="sm" onClick={handleDownloadPDF}>
-              <Download className="w-4 h-4 mr-2" />
-              PDF
-            </Button>
+          </h2>
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
+          <Select value={zoom.toString()} onValueChange={(value) => setZoom(parseFloat(value))}>
+            <SelectTrigger className="h-8 w-24 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {zoomOptions.map(option => (
+                <SelectItem key={option.value} value={option.value.toString()} className="text-xs">
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="hidden sm:flex items-center text-xs text-muted-foreground">
+            <Badge variant="outline" className="h-5 px-1.5 font-normal">
+              {PAPER_SIZES[paperSize].name.split(' ')[0]}
+            </Badge>
           </div>
         </div>
-      </CardHeader>
-      
-      <CardContent className="flex-1 p-0">
-        <div className="h-full border rounded-lg bg-gray-50 overflow-hidden">
+
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={handlePrint} className="h-8 text-xs">
+            <Printer className="w-3.5 h-3.5 mr-2" />
+            Print
+          </Button>
+          <Button variant="default" size="sm" onClick={handleDownloadPDF} className="h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white border-none shadow-sm">
+            <Download className="w-3.5 h-3.5 mr-2" />
+            Download PDF
+          </Button>
+        </div>
+      </div>
+
+      {/* Canvas */}
+      <div className="flex-1 overflow-auto bg-slate-100 dark:bg-slate-900/50 p-8 flex justify-center items-start">
+        <div
+          className="transition-transform origin-top duration-200 ease-out shadow-2xl"
+          style={{
+            transform: `scale(${zoom})`,
+            marginBottom: '50px' // Extra space for scrolling
+          }}
+        >
           <iframe
             ref={iframeRef}
-            className="w-full h-full border-0"
+            className="bg-white"
             title="CV Preview"
             sandbox="allow-same-origin"
-            style={{ 
-              backgroundColor: '#f5f5f5',
-              minHeight: '600px'
+            style={{
+              width: PAPER_SIZES[paperSize].width,
+              minHeight: PAPER_SIZES[paperSize].height,
+              border: 'none',
+              // Use CSS variable or calculated visual breaks
             }}
           />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
