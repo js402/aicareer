@@ -58,17 +58,6 @@ export const useCVStore = create<CVStore>()(
         }),
         {
             name: 'cv-storage',
-            partialize: (state) => {
-                // If we have a metadataId (synced to DB), don't persist heavy content
-                if (state.metadataId) {
-                    return {
-                        filename: state.filename,
-                        metadataId: state.metadataId,
-                        // Keep other small UI state if needed, but drop content/analysis
-                    } as any
-                }
-                return state
-            }
         }
     )
 )

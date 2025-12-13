@@ -16,14 +16,9 @@ export interface Position {
   matching_skills: string[]
   missing_skills: string[]
   recommendations: string[]
-  experience_alignment?: any
-  responsibility_alignment?: any
-  employment_type?: string
-  seniority_level?: string
   status: string
   notes?: string
   created_at: string
-  cv_metadata_id?: string
 }
 
 export interface CreatePositionData {
@@ -40,7 +35,6 @@ export interface CreatePositionData {
   responsibility_alignment?: any
   employment_type?: string | null
   seniority_level?: string | null
-  cv_metadata_id?: string
 }
 
 export interface UpdatePositionData {
@@ -119,15 +113,14 @@ export function usePositionActions(positionId?: string) {
   )
 
   // Delete position
-  const deletePosition = useCallback(async (overrideId?: string) => {
-    const targetId = overrideId || positionId
-    if (!targetId) {
+  const deletePosition = useCallback(async () => {
+    if (!positionId) {
       throw new Error('Position ID is required')
     }
 
     return loadingState.execute(
       async () => {
-        const response = await fetch(`/api/job-positions/${targetId}`, {
+        const response = await fetch(`/api/job-positions/${positionId}`, {
           method: 'DELETE'
         })
 

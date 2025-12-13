@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Upload } from "lucide-react"
 import { useCVStore } from "@/hooks/useCVStore"
-import { supabase } from "@/lib/supabase"
 
 interface CVUploadProps {
     onUpload?: (content: string, filename: string) => void
@@ -41,28 +40,8 @@ export function CVUpload({ onUpload }: CVUploadProps) {
             // Read file content
             const content = await file.text()
 
-            // Check if user is authenticated
-            const { data: { session } } = await supabase.auth.getSession()
-
-            if (session?.user) {
-                // Upload to DB
-                const res = await fetch('/api/cv-metadata', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content, filename: file.name })
-                })
-
-                if (!res.ok) throw new Error('Failed to upload CV')
-
-                const data = await res.json()
-
-                // Store minimal state (ID and Name) and clear local content
-                setCV(content, file.name) // Set momentarily for UI
-                useCVStore.getState().setSyncedCV(data.id)
-            } else {
-                // Store in Zustand store (persisted to localStorage)
-                setCV(content, file.name)
-            }
+            // Store in Zustand store (persisted to localStorage automatically)
+            setCV(content, file.name)
 
             // Call optional callback
             if (onUpload) {
@@ -72,8 +51,8 @@ export function CVUpload({ onUpload }: CVUploadProps) {
             // Navigate to review page
             router.push('/cv-review')
         } catch (error) {
-            console.error('Error reading/uploading file:', error)
-            alert('Error processing file. Please try again.')
+            console.error('Error reading file:', error)
+            alert('Error reading file. Please try again.')
         } finally {
             setIsProcessing(false)
         }
@@ -112,9 +91,9 @@ export function CVUpload({ onUpload }: CVUploadProps) {
 
     return (
         <Card
-            className={`relative group overflow-hidden border-dashed border-2 transition-all duration-300 cursor-pointer bg-gradient-to-br from-background to-muted/50 hover:shadow-xl ${isDragging
-                ? 'border-primary bg-primary/5'
-                : 'border-muted-foreground/25 hover:border-primary/50'
+            className={`relative group overflow-hidden border-dashed border-2 transition-all duration-300 cursor-pointer bg-gradient-to-br from-slate-50/50 to-slate-100/50 dark:from-slate-950/50 dark:to-slate-900/50 hover:shadow-xl ${isDragging
+                ? 'border-blue-500 dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/50'
+                : 'border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600'
                 } ${isProcessing ? 'opacity-50 cursor-wait' : ''}`}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -130,10 +109,10 @@ export function CVUpload({ onUpload }: CVUploadProps) {
                 disabled={isProcessing}
             />
 
-            <CardContent className="flex flex-col items-center justify-center p-8 md:p-12 text-center space-y-6">
-                <div className={`p-6 rounded-full bg-primary/5 group-hover:scale-110 transition-transform duration-300 ring-2 ring-primary/10 ${isDragging ? 'scale-110' : ''
+            <CardContent className="flex flex-col items-center justify-center p-12 md:p-16 text-center space-y-6">
+                <div className={`p-6 rounded-full bg-gradient-to-br from-blue-500/10 to-purple-500/10 dark:from-blue-500/20 dark:to-purple-500/20 group-hover:scale-110 transition-transform duration-300 ring-2 ring-blue-500/20 dark:ring-blue-500/30 ${isDragging ? 'scale-110' : ''
                     }`}>
-                    <Upload className="h-16 w-16 text-primary" />
+                    <Upload className="h-16 w-16 text-blue-600 dark:text-blue-400" />
                 </div>
 
                 <div className="space-y-3">
@@ -160,7 +139,7 @@ export function CVUpload({ onUpload }: CVUploadProps) {
                 )}
             </CardContent>
 
-            <div className={`absolute inset-0 bg-primary/5 transition-opacity duration-300 ${isDragging || isProcessing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            <div className={`absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 transition-opacity duration-300 ${isDragging || isProcessing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
                 }`} />
         </Card>
     )

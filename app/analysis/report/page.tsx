@@ -9,8 +9,6 @@ import { Navbar } from "@/components/navbar"
 import { supabase } from "@/lib/supabase"
 import { useCVStore } from "@/hooks/useCVStore"
 import { useSubscription } from "@/hooks/useSubscription"
-import { useAuthCheck } from "@/hooks/useAuthActions"
-import { useUpdateCVMetadataAction } from "@/hooks/useCVMetadata"
 import {
     ArrowLeft, Download, Edit,
     Briefcase, Target, ChevronRight, User, GraduationCap,
@@ -33,35 +31,39 @@ export default function AnalysisReportPage() {
     const cvOperations = useCVOperations()
 
     const [isMounted, setIsMounted] = useState(false)
+    const [isLoading, setIsLoading] = useState(true)
     const [isEditorOpen, setIsEditorOpen] = useState(false)
-
-    // Using useAuthCheck for checking authentication status
-    const { mutate: checkAuth, isLoading: isCheckingAuth } = useAuthCheck({
-        onSuccess: (data) => {
-            if (!data.authenticated) {
-                router.push('/auth?redirect=analysis')
-                return
-            }
-            if (!cvContent) {
-                router.push('/')
-                return
-            }
-            // Subscription check is handled by separate hook or logic below
-        }
-    })
-
-    // We can also trigger the check on mount
-    useEffect(() => {
-        setIsMounted(true)
-        checkAuth(undefined)
-    }, [checkAuth])
-
-    // Update metadata hook
-    const { mutate: updateMetadata } = useUpdateCVMetadataAction()
 
     const cvValidation = useMemo(() => {
         return extractedInfo ? validateCV(extractedInfo) : null
     }, [extractedInfo])
+
+    useEffect(() => {
+        const checkAuthAndLoad = async () => {
+            setIsLoading(true)
+            const { data: { session } } = await supabase.auth.getSession()
+
+            if (!session) {
+                router.push('/auth?redirect=analysis')
+                return
+            }
+
+            if (!cvContent) {
+                router.push('/')
+                return
+            }
+
+            if (!hasProAccess && !subLoading) {
+                router.push('/pricing')
+                return
+            }
+
+            setIsMounted(true)
+            setIsLoading(false)
+        }
+
+        checkAuthAndLoad()
+    }, [cvContent, hasProAccess, subLoading, router])
 
     // Ensure metadata is extracted
     useEffect(() => {
@@ -91,14 +93,21 @@ export default function AnalysisReportPage() {
 
         if (metadataId) {
             try {
-                await updateMetadata({ id: metadataId, extractedInfo: updatedInfo })
+                const response = await fetch(`/api/cv-metadata/${metadataId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ extractedInfo: updatedInfo })
+                })
+                if (!response.ok) {
+                    console.error('Failed to save CV edits to database')
+                }
             } catch (error) {
                 console.error('Error saving CV edits:', error)
             }
         }
     }
 
-    if (!isMounted || isCheckingAuth || subLoading) {
+    if (!isMounted || isLoading || subLoading) {
         return <PageLoader message="Loading report..." />
     }
 

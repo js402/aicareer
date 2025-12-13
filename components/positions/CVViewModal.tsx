@@ -247,23 +247,96 @@ export function CVViewModal({
                                         : "max-w-[210mm]"
                                 )}
                                 style={{
-                                    minHeight: '297mm',
-                                    position: 'relative'
+                                    padding: styles.contentPadding,
+                                    fontSize: styles.bodySize,
+                                    lineHeight: styles.lineHeight,
+                                    minHeight: '297mm'
                                 }}
                             >
-                                {/* Visual Page Break Guide */}
-                                <div
-                                    className="absolute w-full border-b border-dashed border-destructive/50 pointer-events-none print:hidden flex items-end justify-end pr-2"
-                                    style={{ top: '297mm', height: '1px' }}
-                                >
-                                    <span className="text-[10px] text-destructive font-mono translate-y-full mb-1">Page 1 End (A4)</span>
-                                </div>
-
                                 <div
                                     id="cv-preview-content"
                                     className="max-w-none"
                                 >
-                                    <style>{generateCSS('#cv-preview-content')}</style>
+                                    <style>{`
+                                        #cv-preview-content {
+                                            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                                            font-size: ${styles.bodySize} !important;
+                                            line-height: ${styles.lineHeight} !important;
+                                            color: #1a1a1a;
+                                        }
+                                        #cv-preview-content h1 {
+                                            font-size: ${styles.h1Size} !important;
+                                            line-height: 1.1 !important;
+                                            text-align: center;
+                                            margin-bottom: 0.2em !important;
+                                            margin-top: 0 !important;
+                                            font-weight: 700;
+                                            color: #111;
+                                        }
+                                        #cv-preview-content h1 + p {
+                                            text-align: center !important;
+                                            color: #444 !important;
+                                            font-size: calc(${styles.bodySize} * 0.95) !important;
+                                            margin-bottom: 0.6em !important;
+                                        }
+                                        #cv-preview-content h2 {
+                                            font-size: ${styles.h2Size} !important;
+                                            margin-top: ${styles.h2MarginTop} !important;
+                                            margin-bottom: 0.3em !important;
+                                            line-height: 1.2 !important;
+                                            font-weight: 700;
+                                            text-transform: uppercase;
+                                            letter-spacing: 0.03em;
+                                            border-bottom: 1.5px solid #333;
+                                            padding-bottom: 0.15em;
+                                            color: #111;
+                                        }
+                                        #cv-preview-content h3 {
+                                            font-size: ${styles.h3Size} !important;
+                                            margin-top: ${styles.h3MarginTop} !important;
+                                            margin-bottom: 0.15em !important;
+                                            line-height: 1.25 !important;
+                                            font-weight: 600;
+                                            color: #222;
+                                        }
+                                        #cv-preview-content p {
+                                            margin-bottom: ${styles.pMarginBottom} !important;
+                                            margin-top: 0 !important;
+                                            color: #333;
+                                        }
+                                        #cv-preview-content ul {
+                                            list-style: none !important;
+                                            padding-left: 0 !important;
+                                            margin: 0.2em 0 0.4em 0 !important;
+                                        }
+                                        #cv-preview-content li {
+                                            margin-bottom: ${styles.liMarginBottom} !important;
+                                            padding-left: 1em !important;
+                                            position: relative;
+                                            color: #333;
+                                        }
+                                        #cv-preview-content li::before {
+                                            content: "•";
+                                            position: absolute;
+                                            left: 0;
+                                            color: #555;
+                                        }
+                                        #cv-preview-content strong {
+                                            font-weight: 600;
+                                            color: #111;
+                                        }
+                                        #cv-preview-content em {
+                                            font-style: italic;
+                                            color: #555;
+                                        }
+                                        #cv-preview-content a {
+                                            color: #0066cc;
+                                            text-decoration: none;
+                                        }
+                                        #cv-preview-content hr {
+                                            display: none;
+                                        }
+                                    `}</style>
                                     {cv.tailored_content ? (
                                         <ReactMarkdown
                                             remarkPlugins={[remarkGfm]}

@@ -3,8 +3,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { RotateCcw, ChevronDown, ChevronUp } from "lucide-react"
-import { useCVPrintSettings } from "@/hooks/useCVPrintSettings"
-import { TEMPLATES, PRINT_COLOR_PALETTE, type DesignTemplate, type FontPreset, type MarginPreset, type SectionSpacing } from "@/lib/cv-print-templates"
+import { useCVPrintSettings, type FontPreset, type MarginPreset, type SectionSpacing } from "@/hooks/useCVPrintSettings"
 import { useState } from "react"
 
 interface CVPrintSettingsProps {
@@ -41,83 +40,6 @@ export function CVPrintSettings({ onSettingsChange }: CVPrintSettingsProps) {
             </div>
 
             <div className="space-y-3">
-                {/* Design Template */}
-                <div className="space-y-1.5">
-                    <Label htmlFor="design-template" className="text-xs font-medium">
-                        Design Template
-                    </Label>
-                    <Select
-                        value={settings.design || 'modern'}
-                        onValueChange={(value: DesignTemplate) => handleChange('design', value)}
-                    >
-                        <SelectTrigger id="design-template" className="h-9">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {Object.entries(TEMPLATES).map(([key, template]) => (
-                                <SelectItem key={key} value={key}>
-                                    <span className="font-medium">{template.name}</span>
-                                    <span className="text-xs text-muted-foreground ml-2">
-                                        - {template.description}
-                                    </span>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                {/* Accent Color */}
-                <div className="space-y-1.5">
-                    <Label className="text-xs font-medium">Accent Color</Label>
-                    <div className="flex gap-2">
-                        {PRINT_COLOR_PALETTE.map((color) => (
-                            <button
-                                key={color.value}
-                                onClick={() => handleChange('accentColor', color.value)}
-                                className={`w-6 h-6 rounded-full border border-slate-200 dark:border-slate-700 transition-all ${color.class} ${settings.accentColor === color.value ? 'ring-2 ring-offset-2 ring-slate-900 dark:ring-slate-100' : ''
-                                    }`}
-                                title={color.name}
-                            />
-                        ))}
-                    </div>
-                </div>
-
-                {/* Paper Size & Alignment */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="paper-size" className="text-xs font-medium">Paper Size</Label>
-                        <Select
-                            value={settings.paperSize || 'A4'}
-                            onValueChange={(value) => handleChange('paperSize', value)}
-                        >
-                            <SelectTrigger id="paper-size" className="h-8 text-xs">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="A4">A4</SelectItem>
-                                <SelectItem value="Letter">Letter</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <Label htmlFor="header-align" className="text-xs font-medium">Header Align</Label>
-                        <Select
-                            value={settings.headerAlign || 'center'}
-                            onValueChange={(value) => handleChange('headerAlign', value)}
-                        >
-                            <SelectTrigger id="header-align" className="h-8 text-xs">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="left">Left</SelectItem>
-                                <SelectItem value="center">Center</SelectItem>
-                                <SelectItem value="right">Right</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-
                 {/* Font Size Preset */}
                 <div className="space-y-1.5">
                     <Label htmlFor="font-preset" className="text-xs font-medium">

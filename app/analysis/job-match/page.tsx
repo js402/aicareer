@@ -17,12 +17,6 @@ import { Input } from "@/components/ui/input"
 import { useFetch } from "@/hooks/useFetch"
 import { CVEditorModal } from "@/components/cv-editor"
 import type { ExtractedCVInfo } from "@/lib/api-client"
-import { useEvaluateJobMatch, type JobMatchResult } from "@/hooks/useJobMatch"
-import { usePositionActions } from "@/hooks/usePositionActions"
-import { useUpdateCVMetadataAction } from "@/hooks/useCVMetadata"
-import { useCVDetail } from "@/hooks/useCVDetail"
-import { PageLoader } from '@/components/ui/loading-spinner'
-
 
 interface CVMetadata {
     id: string
@@ -40,9 +34,35 @@ export default function JobMatchPage() {
     const router = useRouter()
     const { content: cvContent, jobDescription, setJobDescription } = useCVStore()
 
-    // State for match result
-    const [matchResult, setMatchResult] = useState<JobMatchResult | null>(null)
+    const [matchResult, setMatchResult] = useState<{
+        matchScore: number
+        matchingSkills: string[]
+        missingSkills: string[]
+        experienceAlignment: {
+            seniorityMatch: "Underqualified" | "Good Fit" | "Overqualified"
+            yearsExperienceRequired: number | null
+            yearsExperienceCandidate: number | null
+            comment: string
+        }
+        responsibilityAlignment: {
+            matchingResponsibilities: string[]
+            missingResponsibilities: string[]
+        }
+        recommendations: string[]
+        metadata: {
+            company_name: string
+            position_title: string
+            location: string
+            salary_range: string
+            employment_type: string | null
+            seniority_level: string | null
+        }
+        fromCache?: boolean
+        cachedAt?: string
+    } | null>(null)
+    const [isMatching, setIsMatching] = useState(false)
     const [matchError, setMatchError] = useState('')
+    const [isSaving, setIsSaving] = useState(false)
     const [trackError, setTrackError] = useState('')
     const [selectedCvId, setSelectedCvId] = useState<string>('')
     const [isEditorOpen, setIsEditorOpen] = useState(false)
@@ -58,61 +78,61 @@ export default function JobMatchPage() {
         seniority_level: ''
     })
 
-    // Hooks
+    // Fetch CV list
     const { data: cvResponse } = useFetch<CVMetadataResponse>('/api/cv-metadata')
     const cvList = cvResponse?.metadata || []
 
-    const { mutate: evaluateMatch, isLoading: isMatching } = useEvaluateJobMatch({
-        onSuccess: (data) => {
-            setMatchResult(data)
-            setEditedMetadata({
-                company_name: data.metadata.company_name || '',
-                position_title: data.metadata.position_title || '',
-                location: data.metadata.location || '',
-                salary_range: data.metadata.salary_range || '',
-                employment_type: data.metadata.employment_type || '',
-                seniority_level: data.metadata.seniority_level || ''
-            })
-        },
-        onError: (err) => setMatchError(err.message)
-    })
-
-    const { createPosition, isLoading: isSaving } = usePositionActions()
-    const { mutate: updateMetadata } = useUpdateCVMetadataAction()
-
-    // Fetch selected CV info using useCVDetail instead of manual fetch
-    useCVDetail(selectedCvId || null, {
-        onSuccess: (data) => {
-            if (data.metadata?.extracted_info) {
-                setSelectedCvInfo(data.metadata.extracted_info)
-            }
-        }
-    })
-
     // Compute suggested CV
     const suggestedCvId = useMemo(() => {
-        const best = [...cvList].sort((a, b) =>
-            (b.confidence_score ?? 0) - (a.confidence_score ?? 0) ||
+        const best = [...cvList].sort((a, b) => 
+            (b.confidence_score ?? 0) - (a.confidence_score ?? 0) || 
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         )[0]
         return best?.id || ''
     }, [cvList])
 
-    // Auto-select suggested CV
+    // Auto-select suggested CV on first load
     useEffect(() => {
         if (suggestedCvId && !selectedCvId) {
             setSelectedCvId(suggestedCvId)
         }
     }, [suggestedCvId, selectedCvId])
 
+    // Fetch selected CV's extracted info for editing
+    useEffect(() => {
+        const fetchCvInfo = async () => {
+            if (!selectedCvId) {
+                setSelectedCvInfo(null)
+                return
+            }
+            try {
+                const response = await fetch(`/api/cv-metadata/${selectedCvId}`)
+                if (response.ok) {
+                    const data = await response.json()
+                    setSelectedCvInfo(data.metadata?.extracted_info || null)
+                }
+            } catch (error) {
+                console.error('Error fetching CV info:', error)
+            }
+        }
+        fetchCvInfo()
+    }, [selectedCvId])
+
     useAuthGuard({ redirectTo: 'analysis/job-match' })
 
     const handleSaveCVEdits = async (updatedInfo: ExtractedCVInfo) => {
         if (!selectedCvId) return
-
+        
         try {
-            await updateMetadata({ id: selectedCvId, extractedInfo: updatedInfo })
-            setSelectedCvInfo(updatedInfo)
+            const response = await fetch(`/api/cv-metadata/${selectedCvId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ extractedInfo: updatedInfo })
+            })
+            
+            if (response.ok) {
+                setSelectedCvInfo(updatedInfo)
+            }
         } catch (error) {
             console.error('Error saving CV edits:', error)
         }
@@ -120,59 +140,87 @@ export default function JobMatchPage() {
 
     const handleJobMatch = async () => {
         if (!jobDescription.trim()) return
-        setMatchResult(null)
+
+        setIsMatching(true)
         setMatchError('')
-        evaluateMatch({
-            jobDescription,
-            cvMetadataId: selectedCvId || suggestedCvId
-        })
+        setMatchResult(null)
+
+        try {
+            const response = await fetch('/api/evaluate-job-match', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jobDescription,
+                    cvMetadataId: selectedCvId || suggestedCvId
+                })
+            })
+
+            if (!response.ok) {
+                const data = await response.json()
+                throw new Error(data.error || 'Failed to evaluate job match')
+            }
+
+            const data = await response.json()
+            setMatchResult(data)
+            setEditedMetadata(data.metadata)
+        } catch (err) {
+            setMatchError(err instanceof Error ? err.message : 'An error occurred')
+        } finally {
+            setIsMatching(false)
+        }
     }
 
     const handleTrackApplication = async () => {
         if (!matchResult) return
-
+        
         const cvMetadataId = selectedCvId || suggestedCvId
         if (!cvMetadataId) {
             setTrackError('No CV selected. Please select a CV to track this application.')
             return
         }
-
+        
+        setIsSaving(true)
         setTrackError('')
 
         try {
-            const newPosition = await createPosition({
-                company_name: editedMetadata.company_name,
-                position_title: editedMetadata.position_title,
-                location: editedMetadata.location,
-                salary_range: editedMetadata.salary_range,
-                job_description: jobDescription,
-                match_score: matchResult.matchScore,
-                matching_skills: matchResult.matchingSkills,
-                missing_skills: matchResult.missingSkills,
-                recommendations: matchResult.recommendations,
-                experience_alignment: matchResult.experienceAlignment,
-                responsibility_alignment: matchResult.responsibilityAlignment,
-                employment_type: editedMetadata.employment_type || null,
-                seniority_level: editedMetadata.seniority_level || null,
-                cv_metadata_id: cvMetadataId
+            const response = await fetch('/api/job-positions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    company_name: editedMetadata.company_name,
+                    position_title: editedMetadata.position_title,
+                    location: editedMetadata.location,
+                    salary_range: editedMetadata.salary_range,
+                    job_description: jobDescription,
+                    match_score: matchResult.matchScore,
+                    matching_skills: matchResult.matchingSkills,
+                    missing_skills: matchResult.missingSkills,
+                    recommendations: matchResult.recommendations,
+                    experience_alignment: matchResult.experienceAlignment,
+                    responsibility_alignment: matchResult.responsibilityAlignment,
+                    employment_type: editedMetadata.employment_type || null,
+                    seniority_level: editedMetadata.seniority_level || null,
+                    cv_metadata_id: cvMetadataId
+                })
             })
 
-            if (newPosition) {
+            if (response.ok) {
+                const newPosition = await response.json()
                 router.push(`/positions/${newPosition.id}`)
+            } else {
+                const data = await response.json()
+                throw new Error(data.error || 'Failed to save position')
             }
         } catch (error) {
+            console.error('Error saving position:', error)
             setTrackError(error instanceof Error ? error.message : 'Failed to save position')
+        } finally {
+            setIsSaving(false)
         }
     }
 
     // Show empty state if user has no CVs uploaded
     if (cvList.length === 0) {
-        // If we have local content but no DB entries, we need to sync
-        if (cvContent) {
-            router.push('/onboarding')
-            return <PageLoader message="Syncing your CV..." />
-        }
-
         return (
             <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-slate-950">
                 <Navbar />
@@ -193,7 +241,7 @@ export default function JobMatchPage() {
                             </p>
                         </CardHeader>
                         <CardContent className="flex justify-center pb-8">
-                            <Button
+                            <Button 
                                 onClick={() => router.push('/')}
                                 className="bg-blue-600 hover:bg-blue-700 text-white"
                             >
@@ -263,9 +311,9 @@ export default function JobMatchPage() {
                                                     </Button>
                                                 )}
                                                 {selectedCvId && selectedCvInfo && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
+                                                    <Button 
+                                                        variant="outline" 
+                                                        size="sm" 
                                                         onClick={() => setIsEditorOpen(true)}
                                                         className="gap-1"
                                                     >

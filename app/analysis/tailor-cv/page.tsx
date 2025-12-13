@@ -15,22 +15,15 @@ import type { ExtractedCVInfo } from "@/lib/api-client"
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
-import { useTailorCV } from "@/hooks/useTailorCV"
-import { useUpdateCVMetadataAction } from "@/hooks/useCVMetadata"
-
 export default function TailorCVPage() {
     const router = useRouter()
     const { content: cvContent, jobDescription, extractedInfo, updateExtractedInfo, metadataId } = useCVStore()
 
     const [tailoredCV, setTailoredCV] = useState('')
+    const [isGenerating, setIsGenerating] = useState(false)
+    const [error, setError] = useState('')
     const [copied, setCopied] = useState(false)
     const [isEditorOpen, setIsEditorOpen] = useState(false)
-
-    // Hooks
-    const { mutate: tailorCV, isLoading: isGenerating, error: tailorError } = useTailorCV({
-        onSuccess: (data) => setTailoredCV(data.tailoredCV)
-    })
-    const { mutate: updateMetadata } = useUpdateCVMetadataAction()
 
     useAuthGuard({
         redirectTo: 'analysis/tailor-cv',
@@ -39,10 +32,30 @@ export default function TailorCVPage() {
     })
 
     const generateTailoredCV = async () => {
+        setIsGenerating(true)
+        setError('')
+
         try {
-            await tailorCV({ jobDescription })
+            const response = await fetch('/api/tailor-cv', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jobDescription
+                    // cvContent is now fetched from blueprint by the API
+                })
+            })
+
+            if (!response.ok) {
+                const data = await response.json()
+                throw new Error(data.error || 'Failed to tailor CV')
+            }
+
+            const data = await response.json()
+            setTailoredCV(data.tailoredCV)
         } catch (err) {
-            // Error handled by hook
+            setError(err instanceof Error ? err.message : 'An error occurred')
+        } finally {
+            setIsGenerating(false)
         }
     }
 
@@ -67,18 +80,24 @@ export default function TailorCVPage() {
     const handleSaveCVEdits = async (updatedInfo: ExtractedCVInfo) => {
         // Update local state
         updateExtractedInfo(updatedInfo)
-
+        
         // If we have a metadataId, save to the database
         if (metadataId) {
             try {
-                await updateMetadata({ id: metadataId, extractedInfo: updatedInfo })
+                const response = await fetch(`/api/cv-metadata/${metadataId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ extractedInfo: updatedInfo })
+                })
+                
+                if (!response.ok) {
+                    console.error('Failed to save CV edits to database')
+                }
             } catch (error) {
                 console.error('Error saving CV edits:', error)
             }
         }
     }
-
-    const error = tailorError ? (tailorError instanceof Error ? tailorError.message : String(tailorError)) : ''
 
     if (!cvContent || !jobDescription) return null
 

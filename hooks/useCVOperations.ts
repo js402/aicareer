@@ -1,7 +1,8 @@
+'use client'
+
 import { useCallback } from 'react'
 import { useCVStore } from './useCVStore'
 import { useLoadingState } from './useLoadingState'
-import { useAnalyzeCV, useExtractMetadata, useRetrieveAnalysis } from './useAnalysis'
 import type { ExtractedCVInfo } from '@/lib/api-client'
 
 export interface AnalyzeCVResponse {
@@ -28,18 +29,23 @@ export function useCVOperations() {
   const { setCV, setExtractedInfo, setAnalysis, appendSupplementalInfo, clear } = useCVStore()
   const loadingState = useLoadingState()
 
-  // New hooks
-  const { mutate: extractMutate } = useExtractMetadata()
-  const { mutate: analyzeMutate } = useAnalyzeCV()
-  const { mutate: retrieveMutate } = useRetrieveAnalysis()
-
   // Extract CV metadata
   const extractMetadata = useCallback(
     async (cvContent: string) => {
-      // Use existing loadingState wrapper for consistent error messages/loading flags
       return loadingState.execute<ExtractMetadataResponse>(
         async () => {
-          const result = await extractMutate({ cvContent })
+          const response = await fetch('/api/extract-cv-metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cvContent })
+          })
+
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.error || 'Failed to extract metadata')
+          }
+
+          const result: ExtractMetadataResponse = await response.json()
 
           if (result.extractedInfo) {
             setExtractedInfo(result.extractedInfo, result.metadataId)
@@ -47,10 +53,12 @@ export function useCVOperations() {
 
           return result
         },
-        { errorMessage: 'Failed to process your CV' }
+        {
+          errorMessage: 'Failed to process your CV'
+        }
       )
     },
-    [setExtractedInfo, loadingState, extractMutate]
+    [setExtractedInfo, loadingState]
   )
 
   // Analyze CV - accepts either raw content or extracted info
@@ -58,7 +66,18 @@ export function useCVOperations() {
     async (cvContent?: string, extractedInfo?: ExtractedCVInfo) => {
       return loadingState.execute<AnalyzeCVResponse>(
         async () => {
-          const result = await analyzeMutate({ cvContent, extractedInfo })
+          const response = await fetch('/api/analyze-cv', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cvContent, extractedInfo })
+          })
+
+          if (!response.ok) {
+            const error = await response.json()
+            throw new Error(error.error || 'Failed to analyze CV')
+          }
+
+          const result: AnalyzeCVResponse = await response.json()
 
           if (result.analysis) {
             setAnalysis(result.analysis)
@@ -72,7 +91,7 @@ export function useCVOperations() {
         }
       )
     },
-    [setAnalysis, loadingState, analyzeMutate]
+    [setAnalysis, loadingState]
   )
 
   // Load analysis from stored metadata
@@ -80,7 +99,16 @@ export function useCVOperations() {
     async (cvHash: string, filename?: string) => {
       return loadingState.execute(
         async () => {
-          const data = await retrieveMutate(cvHash)
+          const response = await fetch(`/api/retrieve-analysis?hash=${cvHash}`)
+
+          if (!response.ok) {
+            if (response.status === 404) {
+              throw new Error('Analysis content not found')
+            }
+            throw new Error('Failed to retrieve analysis')
+          }
+
+          const data = await response.json()
 
           // Populate store
           clear()
@@ -97,7 +125,7 @@ export function useCVOperations() {
         }
       )
     },
-    [clear, setCV, setAnalysis, loadingState, retrieveMutate]
+    [clear, setCV, setAnalysis, loadingState]
   )
 
   // Submit supplemental information
@@ -109,17 +137,7 @@ export function useCVOperations() {
           appendSupplementalInfo(questions, answers)
 
           // Re-extract with updated content
-          // The updated content is in the store, but we need to pass the *merged* content.
-          // The appendSupplementalInfo updater modifies the store, but effectively we need to construct the new string here or
-          // rely on the store being updated. Since state updates are sync in react event loop usually but here via zustand...
-          // Zustand set is sync.
-          // BUT, we are passing `cvContent` argument which is the OLD content.
-          // We need to construct the new content manually to pass to extractMetadata.
-
-          const additionalContext = `\n\nADDITIONAL USER CONTEXT:\n${answers.map((a, i) => `Q: ${questions[i]}\nA: ${a}`).join('\n')}`
-          const newContent = cvContent + additionalContext
-
-          return extractMetadata(newContent)
+          return extractMetadata(cvContent)
         },
         {
           successMessage: 'Supplemental information processed!',

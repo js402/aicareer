@@ -125,7 +125,7 @@ export const updateJobPositionSchema = z.object({
 // Career guidance schemas
 export const careerGuidanceSchema = z.object({
   cvContent: z.string().min(10, 'CV content must be at least 10 characters').max(50000, 'CV content is too large').optional(),
-  extractedInfo: z.record(z.string(), z.unknown()).optional()
+  extractedInfo: z.record(z.unknown()).optional()
 }).refine(
   (data) => data.cvContent || data.extractedInfo,
   { message: 'Either cvContent or extractedInfo must be provided' }

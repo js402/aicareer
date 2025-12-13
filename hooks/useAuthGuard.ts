@@ -15,13 +15,10 @@ interface UseAuthGuardResult {
     isAuthenticated: boolean
 }
 
-import { useSubscriptionStatusAction } from '@/hooks/useSubscription'
-
 export function useAuthGuard({ redirectTo = 'analysis', requireCV = false, cvContent }: UseAuthGuardOptions = {}): UseAuthGuardResult {
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(true)
     const [isAuthenticated, setIsAuthenticated] = useState(false)
-    const { mutate: getSubscriptionStatus } = useSubscriptionStatusAction()
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -41,7 +38,8 @@ export function useAuthGuard({ redirectTo = 'analysis', requireCV = false, cvCon
 
                 // Optional: Check if user has Pro access for certain pages
                 if (redirectTo.includes('job-match') || redirectTo.includes('career-guidance')) {
-                    const { isPro } = await getSubscriptionStatus(undefined)
+                    const response = await fetch('/api/subscription/status')
+                    const { isPro } = await response.json()
 
                     if (!isPro) {
                         router.push('/pricing')
