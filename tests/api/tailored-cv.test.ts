@@ -11,7 +11,8 @@ vi.mock('@/lib/openai', () => ({
                 create: vi.fn()
             }
         }
-    }
+    },
+    DEFAULT_MODEL: 'test-model'
 }))
 
 // Mock api-middleware with withProAccess
@@ -41,11 +42,36 @@ const createMockSupabase = () => ({
     },
     from: vi.fn().mockImplementation((table) => {
         if (table === 'cv_metadata') {
+            // Support both list/single fetch and insert for saving tailored CV
             return {
                 select: vi.fn().mockReturnThis(),
                 eq: vi.fn().mockReturnThis(),
                 order: vi.fn().mockReturnThis(),
-                limit: vi.fn().mockResolvedValue({
+                limit: vi.fn().mockReturnThis(),
+                single: vi.fn().mockResolvedValue({
+                    data: {
+                        id: 'cv-123',
+                        cv_hash: 'hash-123',
+                        extracted_info: {
+                            name: 'John Doe',
+                            contactInfo: { email: 'john@example.com' },
+                            experience: [{ title: 'Developer', company: 'Tech Corp', duration: '2020-2024' }],
+                            education: [{ degree: 'BS', institution: 'University', year: '2020' }],
+                            skills: ['JavaScript', 'React']
+                        }
+                    },
+                    error: null
+                }),
+                insert: vi.fn().mockReturnValue({
+                    select: vi.fn().mockReturnValue({
+                        single: vi.fn().mockResolvedValue({
+                            data: { id: 'cv-999', cv_hash: 'hash-999' },
+                            error: null
+                        })
+                    })
+                }),
+                // Some paths may call limit(). This yields list behavior.
+                then: (resolve: any) => resolve({
                     data: [{
                         id: 'cv-123',
                         cv_hash: 'hash-123',
@@ -90,7 +116,7 @@ describe('Tailored CV API', () => {
             ;(global as any).mockProAccessDenied = true
 
             const mockRequest = {
-                json: vi.fn().mockResolvedValue({ jobDescription: 'jd' })
+                json: vi.fn().mockResolvedValue({ jobDescription: 'jd', cvMetadataId: '123e4567-e89b-12d3-a456-426614174000' })
             } as unknown as NextRequest
 
             const response = await tailorCV(mockRequest)
@@ -99,11 +125,30 @@ describe('Tailored CV API', () => {
 
         it('should generate tailored CV successfully for pro users', async () => {
             const mockRequest = {
-                json: vi.fn().mockResolvedValue({ jobDescription: 'jd' })
+                json: vi.fn().mockResolvedValue({ jobDescription: 'jd', cvMetadataId: '123e4567-e89b-12d3-a456-426614174000' })
             } as unknown as NextRequest
 
+            const structuredJson = JSON.stringify({
+                name: 'John Doe',
+                contactInfo: { email: 'john@example.com', phone: null, location: null, linkedin: null, github: null, website: null },
+                summary: 'Experienced developer tailored for JD.',
+                experience: [
+                    { role: 'Developer', company: 'Tech Corp', location: null, duration: '2020-2024', highlights: ['Built features'] }
+                ],
+                skills: ['JavaScript'],
+                inferredSkills: [],
+                education: [],
+                projects: [],
+                certifications: [],
+                languages: [],
+                leadership: [],
+                seniorityLevel: 'mid',
+                yearsOfExperience: 5,
+                industries: [],
+                primaryFunctions: []
+            })
             const mockCompletion = {
-                choices: [{ message: { content: 'Tailored CV Content' } }]
+                choices: [{ message: { content: structuredJson } }]
             }
             vi.mocked(openai.chat.completions.create).mockResolvedValue(mockCompletion as any)
 
@@ -111,22 +156,40 @@ describe('Tailored CV API', () => {
             const data = await response.json()
 
             expect(response.status).toBe(200)
-            expect(data.tailoredCV).toBe('Tailored CV Content')
+            expect(data.tailoredCVData.name).toBe('John Doe')
+            expect(typeof data.tailoredCV).toBe('string')
+            expect(data.validationStatus).toBeTypeOf('string')
         })
 
-        it('should strip markdown code blocks from OpenAI response', async () => {
+        it('should produce clean markdown without code fences', async () => {
+            const structuredJson = JSON.stringify({
+                name: 'Jane Doe',
+                contactInfo: { email: 'jane@example.com', phone: null, location: null, linkedin: null, github: null, website: null },
+                summary: 'Strong candidate summary.',
+                experience: [
+                    { role: 'Engineer', company: 'Example Inc', location: null, duration: '2019-2024', highlights: ['Improved performance'] }
+                ],
+                skills: ['TypeScript'],
+                inferredSkills: [],
+                education: [],
+                projects: [],
+                certifications: [],
+                languages: [],
+                leadership: [],
+                seniorityLevel: 'mid',
+                yearsOfExperience: 6,
+                industries: [],
+                primaryFunctions: []
+            })
             const mockCompletion = {
-                choices: [{
-                    message: {
-                        content: '```markdown\n# Header\nContent\n```'
-                    }
-                }]
+                choices: [{ message: { content: structuredJson } }]
             }
             vi.mocked(openai.chat.completions.create).mockResolvedValue(mockCompletion as any)
 
             const mockRequest = {
                 json: vi.fn().mockResolvedValue({
-                    jobDescription: 'job desc'
+                    jobDescription: 'job desc',
+                    cvMetadataId: '123e4567-e89b-12d3-a456-426614174000'
                 })
             } as unknown as NextRequest
 
@@ -134,7 +197,7 @@ describe('Tailored CV API', () => {
             const data = await response.json()
 
             expect(response.status).toBe(200)
-            expect(data.tailoredCV).toBe('# Header\nContent')
+            expect(data.tailoredCV).not.toContain('```')
         })
     })
 
@@ -142,6 +205,7 @@ describe('Tailored CV API', () => {
         it('should save tailored CV successfully', async () => {
             const mockBody = {
                 job_position_id: 'pos_123',
+                cv_metadata_id: '123e4567-e89b-12d3-a456-426614174001',
                 cv_content: 'original cv',
                 tailored_content: 'This is a tailored CV content that is definitely longer than fifty characters to pass the validation check.'
             }
@@ -171,6 +235,17 @@ describe('Tailored CV API', () => {
                         insert: mockInsert
                     }
                 }
+                if (table === 'cv_metadata') {
+                    return {
+                        select: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnValue({
+                                eq: vi.fn().mockReturnValue({
+                                    single: vi.fn().mockResolvedValue({ data: { cv_hash: 'hash_abc' }, error: null })
+                                })
+                            })
+                        })
+                    }
+                }
                 return {}
             })
 
@@ -188,6 +263,7 @@ describe('Tailored CV API', () => {
         it('should return 400 if tailored content is too short', async () => {
             const mockBody = {
                 job_position_id: 'pos_123',
+                cv_metadata_id: '00000000-0000-0000-0000-000000000002',
                 cv_content: 'original cv',
                 tailored_content: 'too short'
             }

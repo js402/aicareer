@@ -64,7 +64,8 @@ describe('Job Position Deletion & Duplicates', () => {
             body: JSON.stringify({
                 company_name: 'Test Co',
                 position_title: 'Dev',
-                job_description: 'Desc'
+                job_description: 'Desc',
+                cv_metadata_id: '123e4567-e89b-12d3-a456-426614174000'
             })
         })
 

@@ -67,7 +67,8 @@ describe('Job Positions API', () => {
             const mockBody = {
                 company_name: 'Acme Corp',
                 position_title: 'Developer',
-                job_description: 'Write code'
+                job_description: 'Write code',
+                cv_metadata_id: '123e4567-e89b-12d3-a456-426614174000'
             }
 
             const mockRequest = {
