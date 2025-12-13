@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { NextResponse } from 'next/server'
 import { withAuth } from '@/lib/api-middleware'
-import type { ExtractedCVInfo } from '@/lib/api-client'
+import { renderExtractedInfoToMarkdown } from '@/lib/cv-formatter'
 
 // PUT /api/cv-metadata/[id] - Update CV metadata
 export const PUT = withAuth(async (request, { supabase, user }) => {
@@ -42,7 +41,10 @@ export const PUT = withAuth(async (request, { supabase, user }) => {
         const updatePayload: any = {
             updated_at: new Date().toISOString()
         }
-        if (extractedInfo) updatePayload.extracted_info = extractedInfo
+        if (extractedInfo) {
+            updatePayload.extracted_info = extractedInfo
+            updatePayload.cv_content = renderExtractedInfoToMarkdown(extractedInfo)
+        }
         if (displayName) updatePayload.display_name = displayName
 
         const { data, error } = await supabase

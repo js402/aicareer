@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -115,18 +115,26 @@ export default function CareerGuidancePage() {
         }
     }, [postSuggestions])
 
+    // One-time fetch on mount when authenticated with CV data
+    const didFetch = useRef(false)
+
     useEffect(() => {
+        // Guard: only run once, only if authenticated with data, and no existing guidance
+        if (didFetch.current) return
         if (!isAuthenticated) return
         if (!cvContent && !extractedInfo) return
+        if (guidance) return // Already have guidance (e.g., from cache)
 
-        // Auto-generate guidance if user has pro access and we don't have it yet
-        if (!guidance && !loadingState.isLoading && !loadingState.error) {
-            generateGuidance(cvContent || undefined, extractedInfo || undefined)
-        }
-        if (!suggestions && !isLoadingSuggestions) {
-            generateSuggestions(cvContent || undefined, extractedInfo || undefined)
-        }
-    }, [isAuthenticated, guidance, suggestions, cvContent, extractedInfo, generateGuidance, generateSuggestions, loadingState.isLoading, loadingState.error, isLoadingSuggestions])
+        didFetch.current = true
+
+        // Fire-and-forget; mutations handle their own state
+        postGuidance({ cvContent: cvContent || undefined, extractedInfo: extractedInfo || undefined })
+        postSuggestions({ cvContent: cvContent || undefined, extractedInfo: extractedInfo || undefined })
+            .then(() => setIsLoadingSuggestions(false))
+            .catch(() => setIsLoadingSuggestions(false))
+
+        setIsLoadingSuggestions(true)
+    }, [isAuthenticated]) // Only re-check when auth state settles
 
     const handleSaveCVEdits = async (updatedInfo: ExtractedCVInfo) => {
         // Update local state

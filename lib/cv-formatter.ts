@@ -2,59 +2,132 @@
  * Utilities for formatting CV metadata for different purposes
  * Consolidates the formatting logic used across multiple API routes
  */
+import type { ExtractedCVInfo as ApiExtractedCVInfo, CertificationEntry } from './api-client'
 
-interface ContactInfo {
-  email?: string
-  phone?: string
-  location?: string
-  linkedin?: string
-  website?: string
-  portfolio?: string
-}
+export type ExtractedCVInfo = ApiExtractedCVInfo
 
-interface Experience {
-  title?: string
-  role?: string
-  company?: string
-  duration?: string
-  dates?: string
-  bullets?: string[]
-  responsibilities?: string[]
-}
+export function renderExtractedInfoToMarkdown(info: ExtractedCVInfo): string {
+  const lines: string[] = []
 
-interface Education {
-  degree?: string
-  qualification?: string
-  institution?: string
-  school?: string
-  year?: string
-  graduationYear?: string
-}
+  if (info.name) {
+    lines.push(`# ${info.name.trim()}`)
+  }
 
-interface Leadership {
-  role?: string
-  description?: string
-}
+  const contact = typeof info.contactInfo === 'string' ? { raw: info.contactInfo } : (info.contactInfo || {})
+  const contactParts: string[] = []
+  if ('raw' in contact && contact.raw) contactParts.push(contact.raw.trim())
+  if ('email' in contact && contact.email) contactParts.push(contact.email)
+  if ('phone' in contact && contact.phone) contactParts.push(contact.phone)
+  if ('location' in contact && contact.location) contactParts.push(contact.location)
+  if ('linkedin' in contact && contact.linkedin) contactParts.push(contact.linkedin)
+  if ('website' in contact && contact.website) contactParts.push(contact.website)
+  if ('portfolio' in contact && contact.portfolio) contactParts.push(contact.portfolio)
+  if (contactParts.length) {
+    lines.push(contactParts.join(' • '))
+  }
 
-interface Project {
-  name?: string
-  title?: string
-  description?: string
-}
+  if (info.summary) {
+    lines.push('## Summary', info.summary.trim())
+  }
 
-export interface ExtractedCVInfo {
-  name?: string
-  summary?: string
-  contactInfo?: ContactInfo
-  skills?: string[]
-  inferredSkills?: string[]
-  experience?: Experience[]
-  education?: Education[]
-  leadership?: Leadership[]
-  projects?: Project[]
-  certifications?: string[]
-  seniorityLevel?: string
-  yearsOfExperience?: number
+  const skills = [
+    ...(info.skills || []),
+    ...(info.inferredSkills || [])
+  ]
+  if (skills.length) {
+    lines.push('## Skills', skills.join(' • '))
+  }
+
+  if (info.experience?.length) {
+    lines.push('## Experience')
+    info.experience.forEach((exp) => {
+      const role = (exp as any).title || exp.role || 'Role'
+      const company = exp.company || 'Company'
+      const duration = (exp as any).dates || exp.duration || ''
+      const location = (exp as any).location || ''
+      const header = `**${role}** — ${company}${location ? `, ${location}` : ''}${duration ? ` (${duration})` : ''}`
+      lines.push(header)
+
+      const bullets = (
+        (exp as any).highlights ||
+        (exp as any).responsibilities ||
+        (exp as any).bullets ||
+        []
+      ) as string[]
+
+      if ((exp as any).description) {
+        lines.push((exp as any).description)
+      }
+
+      bullets
+        .filter(Boolean)
+        .forEach((b) => lines.push(`- ${b}`))
+    })
+  }
+
+  if (info.education?.length) {
+    lines.push('## Education')
+    info.education.forEach((edu) => {
+      const degree = (edu as any).qualification || edu.degree || 'Degree'
+      const school = (edu as any).institution || (edu as any).school || 'Institution'
+      const year = edu.year || (edu as any).graduationYear || ''
+      lines.push(`**${degree}** — ${school}${year ? ` (${year})` : ''}`)
+    })
+  }
+
+  if (info.projects?.length) {
+    lines.push('## Projects')
+    info.projects.forEach((proj) => {
+      const title = proj.name || (proj as any).title || 'Project'
+      const summary = proj.description || ''
+      const tech = (proj as any).technologies as string[] | undefined
+      lines.push(`**${title}**${tech?.length ? ` — ${tech.join(', ')}` : ''}`)
+      if (summary) lines.push(`- ${summary}`)
+    })
+  }
+
+  if (info.leadership?.length) {
+    lines.push('## Leadership & Impact')
+    info.leadership.forEach((item) => {
+      lines.push(`**${item.role}** — ${item.organization || item.description || ''}`)
+      if ((item as any).description) {
+        lines.push(`- ${(item as any).description}`)
+      }
+      if (item.highlights?.length) {
+        item.highlights.filter(Boolean).forEach((h) => lines.push(`- ${h}`))
+      }
+    })
+  }
+
+  if (info.certifications?.length) {
+    const certLabels = (info.certifications as any[]).map((cert) => {
+      if (typeof cert === 'string') return cert
+      const c = cert as CertificationEntry
+      if (c.name && c.issuer) return `${c.name} (${c.issuer})`
+      return c.name || c.issuer || ''
+    }).filter(Boolean)
+    if (certLabels.length) {
+      lines.push('## Certifications', certLabels.join(' • '))
+    }
+  }
+
+  if (info.languages?.length) {
+    lines.push('## Languages', info.languages.join(' • '))
+  }
+
+  if (info.primaryFunctions?.length) {
+    lines.push('## Focus Areas', info.primaryFunctions.join(' • '))
+  }
+
+  if (info.industries?.length) {
+    lines.push('## Industries', info.industries.join(' • '))
+  }
+
+  if (info.yearsOfExperience !== undefined) {
+    lines.push('## Experience Summary', `${info.yearsOfExperience} years of experience`)
+  }
+
+  return lines.join('\n').trim()
 }
 
 /**

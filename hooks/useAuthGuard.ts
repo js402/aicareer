@@ -57,7 +57,9 @@ export function useAuthGuard({ redirectTo = 'analysis', requireCV = false, cvCon
         }
 
         checkAuth()
-    }, [router, redirectTo, requireCV, cvContent])
+        // router is stable; omit to avoid re-running unnecessarily
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [redirectTo, requireCV, cvContent])
 
     return { isLoading, isAuthenticated }
 }

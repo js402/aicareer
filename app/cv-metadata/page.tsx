@@ -18,6 +18,7 @@ import { useLoadingState } from "@/hooks/useLoadingState"
 import { CVMetadataCard } from "@/components/cv-metadata/cv-metadata-card"
 import { CVViewModal } from "@/components/positions/CVViewModal"
 import { downloadMarkdown } from "@/lib/download-helpers"
+import { renderExtractedInfoToMarkdown } from "@/lib/cv-formatter"
 import type { CVMetadataResponse, ExtractedCVInfo } from "@/lib/api-client"
 
 export default function CVMetadataPage() {
@@ -62,6 +63,18 @@ export default function CVMetadataPage() {
     useEffect(() => {
         checkAuthAndLoadMetadata()
     }, [checkAuthAndLoadMetadata])
+
+    const getRenderableContent = useCallback((item: CVMetadataResponse) => {
+        const content = item.cv_content?.trim()
+        if (content) return content
+
+        try {
+            return renderExtractedInfoToMarkdown(item.extracted_info)
+        } catch (err) {
+            console.error('Failed to render CV content for preview', err)
+            return ''
+        }
+    }, [])
 
 
 
@@ -156,8 +169,9 @@ export default function CVMetadataPage() {
     }
 
     const handleViewContent = (item: CVMetadataResponse) => {
-        if (item.cv_content) {
-            setViewingCV(item)
+        const content = getRenderableContent(item)
+        if (content) {
+            setViewingCV({ ...item, cv_content: content })
             setIsViewModalOpen(true)
         } else {
             loadingState.setError('No content available for this CV.')
@@ -165,11 +179,12 @@ export default function CVMetadataPage() {
     }
 
     const handleDownload = (item: CVMetadataResponse) => {
-        if (item.cv_content) {
+        const content = getRenderableContent(item)
+        if (content) {
             const displayName = item.display_name || item.extracted_info?.name || 'CV'
             const safeName = displayName.replace(/[^a-z0-9]/gi, '_').toLowerCase()
             const filename = `${safeName}.md`
-            downloadMarkdown(item.cv_content, filename, true)
+            downloadMarkdown(content, filename, true)
         } else {
             loadingState.setError('No content available for download.')
         }

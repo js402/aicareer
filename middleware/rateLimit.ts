@@ -25,6 +25,12 @@ export async function rateLimit(
 
         if (fetchError && fetchError.code !== 'PGRST116') {
             // PGRST116 is "no rows returned" which is expected
+            // PGRST205 is "relation not found" (table missing) — treat as soft-disable
+            if (fetchError.code === 'PGRST205') {
+                console.warn('Rate limit table missing (rate_limits); allowing request')
+                return true
+            }
+
             console.error('Rate limit fetch error:', fetchError)
             // Allow request on error to avoid blocking legitimate users
             return true
@@ -63,6 +69,10 @@ export async function rateLimit(
                 })
 
             if (insertError) {
+                if ((insertError as any).code === 'PGRST205') {
+                    console.warn('Rate limit table missing (rate_limits) on insert; allowing request')
+                    return true
+                }
                 console.error('Rate limit insert error:', insertError)
                 return true // Allow on error
             }

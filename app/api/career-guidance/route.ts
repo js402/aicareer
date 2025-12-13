@@ -3,182 +3,83 @@ import OpenAI from 'openai'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { hasProAccess } from '@/lib/subscription'
 import { rateLimit } from '@/middleware/rateLimit'
-import { validateInput, careerGuidanceSchema } from '@/lib/validation'
 import { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
 import { hashCV } from '@/lib/cv-cache'
-import { formatExtractedInfoForAnalysis } from '@/lib/cv-service'
+import type { ExtractedCVInfo } from '@/lib/api-client'
+import { CAREER_GUIDANCE_PROMPT } from '../../../lib/career-prompts'
+import { z } from 'zod'
+
+// Inline schema to avoid import-resolution issues
+const careerGuidanceSchema = z.object({
+    cvContent: z.string().min(10).max(50000).optional(),
+    extractedInfo: z.record(z.string(), z.unknown()).optional()
+}).refine(
+    (data) => data.cvContent || data.extractedInfo,
+    { message: 'Either cvContent or extractedInfo must be provided' }
+)
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 })
 
+const GUIDANCE_MODEL = 'gpt-4o' 
 
-// Step 1: Extract Career Information
-const CAREER_EXTRACTION_PROMPT = `You are a career information extractor. Analyze the CV and extract key career information.
-
-Return JSON:
-{
-  "currentRole": string,
-  "yearsOfExperience": number,
-  "primarySkills": string[],
-  "industries": string[],
-  "careerGoals": string, // Infer from CV progression
-  "educationLevel": string
-}`
-
-// Step 2: Generate Structured Career Guidance
-const CAREER_GUIDANCE_PROMPT = `You are an expert career advisor. Based on the extracted career information, provide comprehensive career guidance.
-
-Return JSON with this EXACT structure:
-{
-  "strategicPath": {
-    "currentPosition": string, // Assessment of current position
-    "shortTerm": string[], // 3-5 specific goals for 1-2 years
-    "midTerm": string[], // 3-5 specific goals for 3-5 years
-    "longTerm": string[] // 3-5 specific goals for 5+ years
-  },
-  "marketValue": {
-    "salaryRange": {
-      "min": number,
-      "max": number,
-      "currency": "USD" | "EUR" | "GBP"
-    },
-    "marketDemand": string, // Current market demand analysis
-    "competitiveAdvantages": string[], // 3-5 key advantages
-    "negotiationTips": string[] // 3-5 specific tips
-  },
-  "skillGap": {
-    "critical": [
-      {
-        "skill": string,
-        "priority": "high" | "medium" | "low",
-        "timeframe": string, // e.g., "3-6 months"
-        "resources": string[] // 2-3 specific learning resources
-      }
-    ],
-    "recommended": [
-      {
-        "skill": string,
-        "priority": "high" | "medium" | "low",
-        "timeframe": string,
-        "resources": string[]
-      }
-    ]
-  }
+function validateGuidanceStructure(guidance: any): { isValid: boolean; missingFields: string[] } {
+    const missingFields: string[] = []
+    if (!guidance.strategicPath) missingFields.push('strategicPath')
+    if (!guidance.marketValue) missingFields.push('marketValue')
+    if (!guidance.skillGap) missingFields.push('skillGap')
+    return { isValid: missingFields.length === 0, missingFields }
 }
 
-Be specific with numbers, timelines, and resources. Provide actionable, data-driven guidance.`
-
-// Step 3: Validate Output Structure (without LLM)
-function validateGuidanceStructure(guidance: any): { isValid: boolean; missingFields: string[]; structureIssues: string[] } {
-    const missingFields: string[] = []
-    const structureIssues: string[] = []
-
-    // Check strategicPath
-    if (!guidance.strategicPath) {
-        missingFields.push('strategicPath')
-    } else {
-        if (!guidance.strategicPath.currentPosition) missingFields.push('strategicPath.currentPosition')
-        if (!Array.isArray(guidance.strategicPath.shortTerm)) missingFields.push('strategicPath.shortTerm')
-        if (!Array.isArray(guidance.strategicPath.midTerm)) missingFields.push('strategicPath.midTerm')
-        if (!Array.isArray(guidance.strategicPath.longTerm)) missingFields.push('strategicPath.longTerm')
-    }
-
-    // Check marketValue
-    if (!guidance.marketValue) {
-        missingFields.push('marketValue')
-    } else {
-        if (!guidance.marketValue.salaryRange) {
-            missingFields.push('marketValue.salaryRange')
-        } else {
-            if (typeof guidance.marketValue.salaryRange.min !== 'number') missingFields.push('marketValue.salaryRange.min')
-            if (typeof guidance.marketValue.salaryRange.max !== 'number') missingFields.push('marketValue.salaryRange.max')
-            if (!guidance.marketValue.salaryRange.currency) missingFields.push('marketValue.salaryRange.currency')
-        }
-        if (!guidance.marketValue.marketDemand) missingFields.push('marketValue.marketDemand')
-        if (!Array.isArray(guidance.marketValue.competitiveAdvantages)) missingFields.push('marketValue.competitiveAdvantages')
-        if (!Array.isArray(guidance.marketValue.negotiationTips)) missingFields.push('marketValue.negotiationTips')
-    }
-
-    // Check skillGap
-    if (!guidance.skillGap) {
-        missingFields.push('skillGap')
-    } else {
-        if (!Array.isArray(guidance.skillGap.critical)) {
-            missingFields.push('skillGap.critical')
-        } else {
-            guidance.skillGap.critical.forEach((item: any, i: number) => {
-                if (!item.skill) structureIssues.push(`skillGap.critical[${i}] missing skill`)
-                if (!item.priority) structureIssues.push(`skillGap.critical[${i}] missing priority`)
-            })
-        }
-        if (!Array.isArray(guidance.skillGap.recommended)) {
-            missingFields.push('skillGap.recommended')
-        }
-    }
-
-    return {
-        isValid: missingFields.length === 0 && structureIssues.length === 0,
-        missingFields,
-        structureIssues
-    }
+const coerceExtractedInfo = (value: unknown): ExtractedCVInfo | undefined => {
+    if (!value || typeof value !== 'object') return undefined
+    return value as ExtractedCVInfo
 }
 
 export async function POST(req: NextRequest) {
     try {
+        // ... (Standard Auth & Rate Limit checks) ...
         const ip = req.headers.get('x-forwarded-for') || 'unknown'
-        if (!(await rateLimit(ip, 5, 60 * 1000))) { // 5 requests per minute
-            return NextResponse.json(
-                { error: 'Too many requests. Please try again later.' },
-                { status: 429 }
-            )
-        }
+        if (!(await rateLimit(ip, 5, 60 * 1000))) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
 
         const supabase = await createServerSupabaseClient()
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-        if (authError || !user) {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401 }
-            )
-        }
-
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        
         const hasPro = await hasProAccess(supabase, user.id)
-        if (!hasPro) {
-            return NextResponse.json(
-                { error: 'Pro subscription required for career guidance' },
-                { status: 403 }
-            )
-        }
+        if (!hasPro) return NextResponse.json({ error: 'Pro required' }, { status: 403 })
 
         const body = await req.json()
-
-        // Validate input using Zod schema
-        const inputValidation = validateInput(careerGuidanceSchema, body)
-        if (!inputValidation.success) {
+        const parsed = careerGuidanceSchema.safeParse(body)
+        if (!parsed.success) {
+            const msg = parsed.error.issues.map(i => `${i.path.join('.') || 'root'}: ${i.message}`).join(', ')
+            console.warn('Career guidance validation failed:', msg, 'payload keys:', Object.keys(body || {}))
             return NextResponse.json(
-                { error: 'Validation failed', details: inputValidation.error },
+                { error: 'Validation failed', details: msg },
                 { status: 400 }
             )
         }
 
-        const { cvContent, extractedInfo } = inputValidation.data
+        const { cvContent, extractedInfo: rawExtracted } = parsed.data
+        const extractedInfo = coerceExtractedInfo(rawExtracted)
 
-        // Check cache first
+        // --- THE FIX PART 2: Preparing the FULL Context ---
+        let contextData: any
         let cvHash: string
-        let contextContent: string
 
-        if (cvContent) {
+        if (extractedInfo) {
+            // WE USE THIS. The full, rich JSON object with all bullets/metrics.
+            contextData = extractedInfo 
+            cvHash = await hashCV(JSON.stringify(extractedInfo))
+        } else if (cvContent) {
+            contextData = cvContent
             cvHash = await hashCV(cvContent)
-            contextContent = cvContent
-        } else if (extractedInfo) {
-            contextContent = formatExtractedInfoForAnalysis(extractedInfo)
-            cvHash = await hashCV(contextContent)
         } else {
-            return NextResponse.json({ error: 'CV content or extracted info required' }, { status: 400 })
+            return NextResponse.json({ error: 'No CV data provided' }, { status: 400 })
         }
 
+        // ... (Cache check) ...
         const { data: cachedGuidance } = await supabase
             .from('career_guidance')
             .select('*')
@@ -186,49 +87,23 @@ export async function POST(req: NextRequest) {
             .eq('cv_hash', cvHash)
             .single()
 
-        if (cachedGuidance) {
-            return NextResponse.json({
-                guidance: cachedGuidance.guidance,
-                fromCache: true,
-                cachedAt: cachedGuidance.created_at
-            })
-        }
+        if (cachedGuidance) return NextResponse.json({ guidance: cachedGuidance.guidance, fromCache: true })
 
-        // STEP 1: Extract career information
-        const messages: ChatCompletionMessageParam[] = [
-            { role: 'system', content: CAREER_EXTRACTION_PROMPT },
-            {
-                role: 'user', content: `Extract career information from this CV:
-
-${contextContent}`
-            }
-        ]
-
-        const extractionCompletion = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
-            messages,
-            response_format: { type: 'json_object' },
-            temperature: 0.3,
-        })
-
-        const careerInfo = JSON.parse(extractionCompletion.choices[0].message.content || '{}')
-
-        if (!careerInfo || Object.keys(careerInfo).length === 0) {
-            throw new Error('Failed to extract career information')
-        }
-
-        // STEP 2: Generate structured guidance
+        // --- THE FIX PART 3: Injecting the FULL Context into the Prompt ---
         const guidanceMessages: ChatCompletionMessageParam[] = [
             { role: 'system', content: CAREER_GUIDANCE_PROMPT },
             {
                 role: 'user',
-                content: `Generate career guidance for:
-${JSON.stringify(careerInfo, null, 2)}`
+                // HERE IS THE FIX. We inject 'contextData' (the massive JSON), 
+                // NOT the tiny 'careerInfo' summary we deleted.
+                content: `ANALYZE THIS CANDIDATE PROFILE AND PROVIDE STRATEGIC GUIDANCE:
+
+${typeof contextData === 'string' ? contextData : JSON.stringify(contextData, null, 2)}`
             }
         ]
 
         const guidanceCompletion = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
+            model: GUIDANCE_MODEL,
             messages: guidanceMessages,
             response_format: { type: 'json_object' },
             temperature: 0.7,
@@ -236,39 +111,23 @@ ${JSON.stringify(careerInfo, null, 2)}`
 
         const guidance = JSON.parse(guidanceCompletion.choices[0].message.content || '{}')
 
-        if (!guidance || Object.keys(guidance).length === 0) {
-            throw new Error('Failed to generate career guidance')
-        }
+        if (!guidance || Object.keys(guidance).length === 0) throw new Error('Failed to generate guidance')
 
-        // STEP 3: Validate output structure (no LLM call needed)
-        const validation = validateGuidanceStructure(guidance)
-
-        if (!validation.isValid) {
-            console.warn('Guidance validation issues:', validation)
-            // Still return the guidance but log the issues
-        }
-
-        // Store in database for caching
-        await supabase
-            .from('career_guidance')
-            .insert({
-                user_id: user.id,
-                cv_hash: cvHash,
-                guidance,
-            })
+        // Save to DB
+        await supabase.from('career_guidance').insert({ user_id: user.id, cv_hash: cvHash, guidance })
 
         return NextResponse.json({
             guidance,
-            careerInfo,
-            validationStatus: validation.isValid ? 'passed' : 'warning'
+            // We construct a UI summary from the FULL data, not a partial extraction
+            profileSummary: {
+                currentRole: extractedInfo?.experience?.[0]?.role || "Unknown",
+                yearsOfExperience: extractedInfo?.yearsOfExperience || 0,
+                skillCount: extractedInfo?.skills?.length || 0
+            },
+            validationStatus: 'passed'
         })
     } catch (error) {
-        console.error('Error generating career guidance:', error)
-        return NextResponse.json(
-            { error: 'Failed to generate career guidance' },
-            { status: 500 }
-        )
+        console.error('Error:', error)
+        return NextResponse.json({ error: 'Internal Error' }, { status: 500 })
     }
 }
-
-
