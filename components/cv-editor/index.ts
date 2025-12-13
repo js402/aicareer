@@ -6,6 +6,11 @@ export type { CVEditorProps } from './cv-editor'
 export { CVEditorModal } from './cv-editor-modal'
 export type { CVEditorModalProps } from './cv-editor-modal'
 
+// CV Layout Editor (Print/PDF Optimization)
+export { default as CVLayoutEditor } from './cv-layout-editor'
+export { default as CVPreview } from './cv-preview'
+export { default as CVEditorPage } from './cv-editor-page'
+
 // CV Validation
 export { validateCV, getFirstIncompleteSectionId, getMissingFieldsForSection } from './cv-validation'
 export type { CVValidationResult, SectionValidation, FieldValidation } from './cv-validation'

@@ -3,7 +3,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Edit, Trash2, FileText, User, Briefcase, GraduationCap, Award, Calendar, Sparkles, Loader2, Eye, Download } from "lucide-react"
+import { Edit, Trash2, FileText, User, Briefcase, GraduationCap, Award, Calendar, Sparkles, Loader2, Eye, Download, Palette } from "lucide-react"
+import { useRouter } from "next/navigation"
 import type { CVMetadataResponse } from "@/lib/api-client"
 import { useState } from "react"
 
@@ -17,6 +18,7 @@ interface CVMetadataCardProps {
   onRename: (id: string, name: string) => Promise<void>
   onViewContent?: (item: CVMetadataResponse) => void
   onDownload?: (item: CVMetadataResponse) => void
+  onDesignLayout?: (item: CVMetadataResponse) => void
 }
 
 const getStatusColor = (status: string) => {
@@ -37,8 +39,10 @@ export function CVMetadataCard({
   onLoadAnalysis,
   onRename,
   onViewContent,
-  onDownload
+  onDownload,
+  onDesignLayout
 }: CVMetadataCardProps) {
+  const router = useRouter()
   const [displayName, setDisplayName] = useState((item as any).display_name || '')
 
   const handleRename = async () => {
@@ -202,6 +206,16 @@ export function CVMetadataCard({
               )}
             </Button>
           )}
+
+          {/* Design Layout button */}
+          <Button
+            variant="outline"
+            className="w-full h-10 border-blue-200 hover:border-blue-300 hover:bg-blue-50 dark:border-blue-900 dark:hover:border-blue-800 dark:hover:bg-blue-950 text-blue-600 hover:text-blue-700"
+            onClick={() => onDesignLayout ? onDesignLayout(item) : router.push(`/cv-editor?id=${item.id}`)}
+          >
+            <Palette className="h-4 w-4 mr-2" />
+            Design & Print
+          </Button>
 
           <div className="flex gap-3">
             <Button

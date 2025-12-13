@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,7 +10,7 @@ import { useCreateCheckoutSession } from '@/hooks/useCheckout'
 
 import { useSearchParams } from 'next/navigation'
 
-export default function CheckoutPage() {
+function CheckoutContent() {
     const searchParams = useSearchParams()
     const redirect = searchParams.get('redirect')
     const [isLoading, setIsLoading] = useState(false)
@@ -171,5 +171,17 @@ export default function CheckoutPage() {
                 </div>
             </main>
         </div>
+    )
+}
+
+export default function CheckoutPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+        }>
+            <CheckoutContent />
+        </Suspense>
     )
 }

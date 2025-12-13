@@ -1,10 +1,11 @@
 "use client"
 
+import { Suspense } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Navbar } from "@/components/navbar"
-import { Check } from "lucide-react"
+import { Check, Loader2 } from "lucide-react"
 import { Footer } from "@/components/footer"
 import { PageHeader } from "@/components/page-header"
 import { useFetch } from "@/hooks/useFetch"
@@ -15,7 +16,7 @@ interface SubscriptionStatus {
 
 import { useSearchParams } from "next/navigation"
 
-export default function PricingPage() {
+function PricingContent() {
     const searchParams = useSearchParams()
     const redirect = searchParams.get('redirect')
     const { data: subscription } = useFetch<SubscriptionStatus>(
@@ -223,5 +224,17 @@ export default function PricingPage() {
 
             <Footer />
         </div>
+    )
+}
+
+export default function PricingPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+        }>
+            <PricingContent />
+        </Suspense>
     )
 }

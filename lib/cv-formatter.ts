@@ -2,9 +2,70 @@
  * Utilities for formatting CV metadata for different purposes
  * Consolidates the formatting logic used across multiple API routes
  */
-import type { ExtractedCVInfo as ApiExtractedCVInfo, CertificationEntry } from './api-client'
+import type { ExtractedCVInfo as ApiExtractedCVInfo, CertificationEntry, ContactInfo, ExperienceEntry, EducationEntry, ProjectEntry } from './api-client'
 
 export type ExtractedCVInfo = ApiExtractedCVInfo
+
+/**
+ * Helper to normalize contact info to an object with string values
+ */
+function normalizeContactInfo(contactInfo: string | ContactInfo | undefined): Record<string, string> {
+  if (!contactInfo) return {}
+  if (typeof contactInfo === 'string') {
+    return { raw: contactInfo }
+  }
+  // Cast to Record<string, string | undefined> and filter undefined values
+  const result: Record<string, string> = {}
+  if (contactInfo.email) result.email = contactInfo.email
+  if (contactInfo.phone) result.phone = contactInfo.phone
+  if (contactInfo.location) result.location = contactInfo.location
+  if (contactInfo.linkedin) result.linkedin = contactInfo.linkedin
+  if (contactInfo.github) result.github = contactInfo.github
+  if (contactInfo.website) result.website = contactInfo.website
+  if (contactInfo.raw) result.raw = contactInfo.raw
+  return result
+}
+
+/**
+ * Helper to get experience entry fields with fallbacks
+ */
+function getExpFields(exp: ExperienceEntry) {
+  const expAny = exp as any
+  return {
+    title: expAny.title || exp.role || 'Position',
+    company: exp.company || 'Company',
+    duration: exp.duration || expAny.dates || '',
+    location: exp.location || '',
+    description: exp.description || '',
+    highlights: exp.highlights || expAny.bullets || expAny.responsibilities || []
+  }
+}
+
+/**
+ * Helper to get education entry fields with fallbacks
+ */
+function getEduFields(edu: EducationEntry) {
+  const eduAny = edu as any
+  return {
+    degree: edu.degree || eduAny.qualification || 'Degree',
+    institution: edu.institution || eduAny.school || 'Institution',
+    year: edu.year || eduAny.graduationYear || '',
+    location: edu.location || ''
+  }
+}
+
+/**
+ * Helper to get project entry fields with fallbacks
+ */
+function getProjFields(proj: ProjectEntry) {
+  const projAny = proj as any
+  return {
+    name: proj.name || projAny.title || 'Project',
+    description: proj.description || '',
+    technologies: proj.technologies || [],
+    link: proj.link || ''
+  }
+}
 
 export function renderExtractedInfoToMarkdown(info: ExtractedCVInfo): string {
   const lines: string[] = []
@@ -13,15 +74,14 @@ export function renderExtractedInfoToMarkdown(info: ExtractedCVInfo): string {
     lines.push(`# ${info.name.trim()}`)
   }
 
-  const contact = typeof info.contactInfo === 'string' ? { raw: info.contactInfo } : (info.contactInfo || {})
+  const contact = normalizeContactInfo(info.contactInfo)
   const contactParts: string[] = []
-  if ('raw' in contact && contact.raw) contactParts.push(contact.raw.trim())
-  if ('email' in contact && contact.email) contactParts.push(contact.email)
-  if ('phone' in contact && contact.phone) contactParts.push(contact.phone)
-  if ('location' in contact && contact.location) contactParts.push(contact.location)
-  if ('linkedin' in contact && contact.linkedin) contactParts.push(contact.linkedin)
-  if ('website' in contact && contact.website) contactParts.push(contact.website)
-  if ('portfolio' in contact && contact.portfolio) contactParts.push(contact.portfolio)
+  if (contact.raw) contactParts.push(contact.raw.trim())
+  if (contact.email) contactParts.push(contact.email)
+  if (contact.phone) contactParts.push(contact.phone)
+  if (contact.location) contactParts.push(contact.location)
+  if (contact.linkedin) contactParts.push(contact.linkedin)
+  if (contact.website) contactParts.push(contact.website)
   if (contactParts.length) {
     lines.push(contactParts.join(' • '))
   }
@@ -147,15 +207,14 @@ export function formatCVMetadataForAnalysis(extractedInfo: ExtractedCVInfo): str
   }
 
   // Contact Info
-  const contact = extractedInfo.contactInfo || {}
+  const contact = normalizeContactInfo(extractedInfo.contactInfo)
   const contactParts: string[] = []
   if (contact.email) contactParts.push(`Email: ${contact.email}`)
   if (contact.phone) contactParts.push(`Phone: ${contact.phone}`)
   if (contact.location) contactParts.push(`Location: ${contact.location}`)
   if (contact.linkedin) contactParts.push(`LinkedIn: ${contact.linkedin}`)
-  if (contact.website || contact.portfolio) {
-    contactParts.push(`Website: ${contact.website || contact.portfolio}`)
-  }
+  if (contact.website) contactParts.push(`Website: ${contact.website}`)
+  if (contact.raw && contactParts.length === 0) contactParts.push(contact.raw)
 
   if (contactParts.length > 0) {
     sections.push(`Contact Information:\n${contactParts.join('\n')}`)
@@ -174,13 +233,10 @@ export function formatCVMetadataForAnalysis(extractedInfo: ExtractedCVInfo): str
   if (extractedInfo.experience && extractedInfo.experience.length > 0) {
     const experienceText = extractedInfo.experience
       .map((exp) => {
-        const title = exp.title || exp.role || 'Position'
-        const company = exp.company || 'Company'
-        const duration = exp.duration || exp.dates || ''
-        const bullets = exp.bullets || exp.responsibilities || []
+        const fields = getExpFields(exp)
         return (
-          `${title} at ${company} (${duration})` +
-          (bullets.length > 0 ? `\n  • ${bullets.join('\n  • ')}` : '')
+          `${fields.title} at ${fields.company} (${fields.duration})` +
+          (fields.highlights.length > 0 ? `\n  • ${fields.highlights.join('\n  • ')}` : '')
         )
       })
       .join('\n\n')
@@ -191,10 +247,8 @@ export function formatCVMetadataForAnalysis(extractedInfo: ExtractedCVInfo): str
   if (extractedInfo.education && extractedInfo.education.length > 0) {
     const educationText = extractedInfo.education
       .map((edu) => {
-        const degree = edu.degree || edu.qualification || 'Degree'
-        const institution = edu.institution || edu.school || 'Institution'
-        const year = edu.year || edu.graduationYear || ''
-        return `${degree} from ${institution}${year ? ` (${year})` : ''}`
+        const fields = getEduFields(edu)
+        return `${fields.degree} from ${fields.institution}${fields.year ? ` (${fields.year})` : ''}`
       })
       .join('\n')
     sections.push(`Education:\n${educationText}`)
@@ -236,15 +290,14 @@ export function formatCVMetadataForTailoring(extractedInfo: ExtractedCVInfo): st
   }
 
   // Contact Info
-  const contact = extractedInfo.contactInfo || {}
+  const contact = normalizeContactInfo(extractedInfo.contactInfo)
   const contactParts: string[] = []
   if (contact.email) contactParts.push(`Email: ${contact.email}`)
   if (contact.phone) contactParts.push(`Phone: ${contact.phone}`)
   if (contact.location) contactParts.push(`Location: ${contact.location}`)
   if (contact.linkedin) contactParts.push(`LinkedIn: ${contact.linkedin}`)
-  if (contact.website || contact.portfolio) {
-    contactParts.push(`Website: ${contact.website || contact.portfolio}`)
-  }
+  if (contact.website) contactParts.push(`Website: ${contact.website}`)
+  if (contact.raw && contactParts.length === 0) contactParts.push(contact.raw)
 
   if (contactParts.length > 0) {
     sections.push(`Contact Information:\n${contactParts.join('\n')}`)
@@ -263,13 +316,10 @@ export function formatCVMetadataForTailoring(extractedInfo: ExtractedCVInfo): st
   if (extractedInfo.experience && extractedInfo.experience.length > 0) {
     const experienceText = extractedInfo.experience
       .map((exp) => {
-        const title = exp.title || exp.role || 'Position'
-        const company = exp.company || 'Company'
-        const duration = exp.duration || exp.dates || ''
-        const bullets = exp.bullets || exp.responsibilities || []
+        const fields = getExpFields(exp)
         return (
-          `${title} at ${company} (${duration})` +
-          (bullets.length > 0 ? `\n  • ${bullets.join('\n  • ')}` : '')
+          `${fields.title} at ${fields.company} (${fields.duration})` +
+          (fields.highlights.length > 0 ? `\n  • ${fields.highlights.join('\n  • ')}` : '')
         )
       })
       .join('\n\n')
@@ -280,10 +330,8 @@ export function formatCVMetadataForTailoring(extractedInfo: ExtractedCVInfo): st
   if (extractedInfo.education && extractedInfo.education.length > 0) {
     const educationText = extractedInfo.education
       .map((edu) => {
-        const degree = edu.degree || edu.qualification || 'Degree'
-        const institution = edu.institution || edu.school || 'Institution'
-        const year = edu.year || edu.graduationYear || ''
-        return `${degree} from ${institution}${year ? ` (${year})` : ''}`
+        const fields = getEduFields(edu)
+        return `${fields.degree} from ${fields.institution}${fields.year ? ` (${fields.year})` : ''}`
       })
       .join('\n')
     sections.push(`Education:\n${educationText}`)
@@ -292,7 +340,7 @@ export function formatCVMetadataForTailoring(extractedInfo: ExtractedCVInfo): st
   // Leadership (if present)
   if (extractedInfo.leadership && extractedInfo.leadership.length > 0) {
     const leadershipText = extractedInfo.leadership
-      .map((item) => `${item.role}: ${item.description}`)
+      .map((item) => `${item.role}: ${item.description || item.organization || ''}`)
       .join('\n')
     sections.push(`Leadership & Impact:\n${leadershipText}`)
   }
@@ -300,14 +348,23 @@ export function formatCVMetadataForTailoring(extractedInfo: ExtractedCVInfo): st
   // Projects (if present)
   if (extractedInfo.projects && extractedInfo.projects.length > 0) {
     const projectsText = extractedInfo.projects
-      .map((proj) => `${proj.name || proj.title}: ${proj.description || ''}`)
+      .map((proj) => {
+        const fields = getProjFields(proj)
+        return `${fields.name}: ${fields.description}`
+      })
       .join('\n')
     sections.push(`Projects:\n${projectsText}`)
   }
 
   // Certifications (if present)
   if (extractedInfo.certifications && extractedInfo.certifications.length > 0) {
-    sections.push(`Certifications: ${extractedInfo.certifications.join(', ')}`)
+    const certNames = extractedInfo.certifications.map((cert) => {
+      if (typeof cert === 'string') return cert
+      return cert.name || ''
+    }).filter(Boolean)
+    if (certNames.length > 0) {
+      sections.push(`Certifications: ${certNames.join(', ')}`)
+    }
   }
 
   return sections.join('\n\n')
